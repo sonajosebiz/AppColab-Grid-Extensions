@@ -1,0 +1,6 @@
+.DS_Store
+.sf/
+.sfdx/
+node_modules/
+coverage/
+*.log

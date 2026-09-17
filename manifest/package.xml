@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://soap.sforce.com/2006/04/metadata">
+    <types>
+        <members>GoogleSheetsClient</members>
+        <members>GoogleSheetsClientTest</members>
+        <members>GoogleSheetsGridDataProvider</members>
+        <members>GoogleSheetsGridDataProviderTest</members>
+        <members>GoogleSheetsTestSupport</members>
+        <name>ApexClass</name>
+    </types>
+    <types>
+        <members>Google_OAuth</members>
+        <name>AuthProvider</name>
+    </types>
+    <types>
+        <members>Google_APIs</members>
+        <name>ExternalCredential</name>
+    </types>
+    <types>
+        <members>Google_Sheets</members>
+        <name>NamedCredential</name>
+    </types>
+    <types>
+        <members>Google_Sheets_Integration</members>
+        <name>PermissionSet</name>
+    </types>
+    <version>67.0</version>
+</Package>

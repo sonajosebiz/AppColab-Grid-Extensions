@@ -1,0 +1,7 @@
+.git/**
+.sf/**
+.sfdx/**
+.DS_Store
+node_modules/**
+**/jsconfig.json
+**/.eslintrc.json
