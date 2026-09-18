@@ -1,27 +1,126 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Package xmlns="http://soap.sforce.com/2006/04/metadata">
     <types>
+        <members>AirtableClient</members>
+        <members>AirtableClientTest</members>
+        <members>AirtableGridDataProvider</members>
+        <members>AirtableGridDataProviderTest</members>
+        <members>AirtableTestSupport</members>
+        <members>AsanaClient</members>
+        <members>AsanaClientTest</members>
+        <members>AsanaGridDataProvider</members>
+        <members>AsanaGridDataProviderTest</members>
+        <members>AsanaTestSupport</members>
+        <members>GmailClient</members>
+        <members>GmailClientTest</members>
+        <members>GmailGridDataProvider</members>
+        <members>GmailGridDataProviderTest</members>
+        <members>GmailTestSupport</members>
+        <members>GoogleAnalyticsClient</members>
+        <members>GoogleAnalyticsClientTest</members>
+        <members>GoogleAnalyticsGridDataProvider</members>
+        <members>GoogleAnalyticsGridDataProviderTest</members>
+        <members>GoogleAnalyticsTestSupport</members>
         <members>GoogleSheetsClient</members>
         <members>GoogleSheetsClientTest</members>
         <members>GoogleSheetsGridDataProvider</members>
         <members>GoogleSheetsGridDataProviderTest</members>
         <members>GoogleSheetsTestSupport</members>
+        <members>HubSpotClient</members>
+        <members>HubSpotClientTest</members>
+        <members>HubSpotGridDataProvider</members>
+        <members>HubSpotGridDataProviderTest</members>
+        <members>HubSpotTestSupport</members>
+        <members>QuickBooksClient</members>
+        <members>QuickBooksClientTest</members>
+        <members>QuickBooksGridDataProvider</members>
+        <members>QuickBooksGridDataProviderTest</members>
+        <members>QuickBooksTestSupport</members>
+        <members>SalesforceClient</members>
+        <members>SalesforceClientTest</members>
+        <members>SalesforceGridDataProvider</members>
+        <members>SalesforceGridDataProviderTest</members>
+        <members>SalesforceTestSupport</members>
+        <members>ShopifyClient</members>
+        <members>ShopifyClientTest</members>
+        <members>ShopifyGridDataProvider</members>
+        <members>ShopifyGridDataProviderTest</members>
+        <members>ShopifyTestSupport</members>
+        <members>StripeClient</members>
+        <members>StripeClientTest</members>
+        <members>StripeGridDataProvider</members>
+        <members>StripeGridDataProviderTest</members>
+        <members>StripeTestSupport</members>
+        <members>SupabaseClient</members>
+        <members>SupabaseClientTest</members>
+        <members>SupabaseGridDataProvider</members>
+        <members>SupabaseGridDataProviderTest</members>
+        <members>SupabaseTestSupport</members>
+        <members>TrelloClient</members>
+        <members>TrelloClientTest</members>
+        <members>TrelloGridDataProvider</members>
+        <members>TrelloGridDataProviderTest</members>
+        <members>TrelloTestSupport</members>
+        <members>XeroClient</members>
+        <members>XeroClientTest</members>
+        <members>XeroGridDataProvider</members>
+        <members>XeroGridDataProviderTest</members>
+        <members>XeroTestSupport</members>
         <name>ApexClass</name>
     </types>
     <types>
+        <members>Gmail_Google_OAuth</members>
+        <members>Google_Analytics_OAuth</members>
         <members>Google_OAuth</members>
+        <members>Xero_OAuth</members>
         <name>AuthProvider</name>
     </types>
     <types>
+        <members>Airtable</members>
+        <members>Asana</members>
+        <members>Gmail_Google_APIs</members>
         <members>Google_APIs</members>
+        <members>Google_Analytics_APIs</members>
+        <members>HubSpot</members>
+        <members>QuickBooks</members>
+        <members>Salesforce_Org</members>
+        <members>Shopify</members>
+        <members>Stripe</members>
+        <members>Supabase</members>
+        <members>Trello</members>
+        <members>Xero</members>
         <name>ExternalCredential</name>
     </types>
     <types>
+        <members>Airtable</members>
+        <members>Asana</members>
+        <members>Gmail</members>
+        <members>Google_Analytics</members>
         <members>Google_Sheets</members>
+        <members>HubSpot</members>
+        <members>QuickBooks</members>
+        <members>Salesforce_Org</members>
+        <members>Shopify</members>
+        <members>Stripe</members>
+        <members>Supabase</members>
+        <members>Trello</members>
+        <members>Xero</members>
         <name>NamedCredential</name>
     </types>
     <types>
+        <members>Airtable_Integration</members>
+        <members>Asana_Integration</members>
+        <members>Gmail_Integration</members>
+        <members>GoogleAnalytics_Integration</members>
         <members>Google_Sheets_Integration</members>
+        <members>HubSpot_Integration</members>
+        <members>QuickBooks_Integration</members>
+        <members>Salesforce_Integration</members>
+        <members>Shopify_Integration</members>
+        <members>Stripe_Integration</members>
+        <members>Supabase_Integration</members>
+        <members>Trello_Integration</members>
+        <members>Xero_Integration</members>
         <name>PermissionSet</name>
     </types>
     <version>67.0</version>

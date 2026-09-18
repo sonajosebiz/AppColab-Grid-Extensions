@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<AuthProvider xmlns="http://soap.sforce.com/2006/04/metadata">
+    <authorizeUrl>https://login.xero.com/identity/connect/authorize</authorizeUrl>
+    <consumerKey>Placeholder_Key</consumerKey>
+    <consumerSecret>Placeholder_Value</consumerSecret>
+    <defaultScopes>offline_access openid profile email accounting.transactions accounting.contacts accounting.settings</defaultScopes>
+    <friendlyName>Xero OAuth</friendlyName>
+    <includeOrgIdInIdentifier>false</includeOrgIdInIdentifier>
+    <isPkceEnabled>false</isPkceEnabled>
+    <providerType>OpenIdConnect</providerType>
+    <requireMfa>false</requireMfa>
+    <sendAccessTokenInHeader>true</sendAccessTokenInHeader>
+    <sendClientCredentialsInHeader>false</sendClientCredentialsInHeader>
+    <sendSecretInApis>true</sendSecretInApis>
+    <tokenUrl>https://identity.xero.com/connect/token</tokenUrl>
+    <userInfoUrl>https://identity.xero.com/connect/userinfo</userInfoUrl>
+</AuthProvider>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <classAccesses>
+        <apexClass>GoogleAnalyticsClient</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>GoogleAnalyticsGridDataProvider</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <description>Runs the GoogleAnalytics AppColab Grid extension and uses its external credential principal.</description>
+    <externalCredentialPrincipalAccesses>
+        <enabled>true</enabled>
+        <externalCredentialPrincipal>Google_Analytics_APIs-Google_User</externalCredentialPrincipal>
+    </externalCredentialPrincipalAccesses>
+    <hasActivationRequired>false</hasActivationRequired>
+    <label>Google Analytics Integration</label>
+</PermissionSet>

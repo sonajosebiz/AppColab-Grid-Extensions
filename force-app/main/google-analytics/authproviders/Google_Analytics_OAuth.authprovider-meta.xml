@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<AuthProvider xmlns="http://soap.sforce.com/2006/04/metadata">
+    <authorizeUrl>https://accounts.google.com/o/oauth2/v2/auth?access_type=offline&amp;prompt=consent</authorizeUrl>
+    <consumerKey>YOUR_GOOGLE_OAUTH_CLIENT_ID</consumerKey>
+    <consumerSecret>Placeholder_Value</consumerSecret>
+    <defaultScopes>openid email profile https://www.googleapis.com/auth/analytics.readonly</defaultScopes>
+    <friendlyName>Google Analytics Google OAuth</friendlyName>
+    <includeOrgIdInIdentifier>false</includeOrgIdInIdentifier>
+    <isPkceEnabled>false</isPkceEnabled>
+    <providerType>OpenIdConnect</providerType>
+    <requireMfa>false</requireMfa>
+    <sendAccessTokenInHeader>true</sendAccessTokenInHeader>
+    <sendClientCredentialsInHeader>false</sendClientCredentialsInHeader>
+    <sendSecretInApis>true</sendSecretInApis>
+    <tokenUrl>https://oauth2.googleapis.com/token</tokenUrl>
+    <userInfoUrl>https://www.googleapis.com/oauth2/v3/userinfo</userInfoUrl>
+</AuthProvider>
