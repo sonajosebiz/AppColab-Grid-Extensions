@@ -25,6 +25,18 @@ public with sharing class SalesforceClient {
         return (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
     }
 
+    /** Fetches the next batch from a Salesforce query locator. */
+    public Map<String, Object> queryMore(String nextRecordsUrl) {
+        String prefix = '/services/data/' + API_VERSION + '/query/';
+        if (String.isBlank(nextRecordsUrl) || !nextRecordsUrl.startsWith(prefix) ||
+            nextRecordsUrl.contains('..') || nextRecordsUrl.contains('?') ||
+            nextRecordsUrl.contains('#')) {
+            throw new ClientException('Invalid Salesforce query locator.');
+        }
+        HttpResponse res = get(nextRecordsUrl);
+        return (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
+    }
+
     /**
      * Fetches metadata describe for an SObject from the remote Salesforce org.
      * GET /services/data/{version}/sobjects/{sObjectName}/describe

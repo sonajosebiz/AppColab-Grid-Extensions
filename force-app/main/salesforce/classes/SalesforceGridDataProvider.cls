@@ -9,8 +9,8 @@ global with sharing class SalesforceGridDataProvider
         'systemmodstamp', 'isdeleted'
     };
 
-    // ─── Instance Cache ───────────────────────────────────────────────
-    private List<Map<String, Object>> cachedRecords;
+    private static final Integer MAX_RECORDS = 50000;
+    private static final Integer MAX_PAGE_SIZE = 2000;
 
     // ─── Config ───────────────────────────────────────────────────────
 
@@ -21,6 +21,9 @@ global with sharing class SalesforceGridDataProvider
         public String whereClause;
         public String orderBy;
         public Integer recordLimit;
+        public String parentMatchColumn;
+        public String parentMatchField;
+        public Boolean autoPopulateParent;
     }
 
     @TestVisible
@@ -73,6 +76,13 @@ global with sharing class SalesforceGridDataProvider
             if (raw.containsKey('orderBy')) {
                 cfg.orderBy = String.valueOf(raw.get('orderBy')).trim();
             }
+            if (raw.containsKey('parentMatchColumn') && raw.get('parentMatchColumn') != null) {
+                cfg.parentMatchColumn = String.valueOf(raw.get('parentMatchColumn')).trim();
+            }
+            if (raw.containsKey('parentMatchField') && raw.get('parentMatchField') != null) {
+                cfg.parentMatchField = String.valueOf(raw.get('parentMatchField')).trim();
+            }
+            cfg.autoPopulateParent = raw.get('autoPopulateParent') == true;
             if (raw.containsKey('limit')) {
                 Object lim = raw.get('limit');
                 if (lim instanceof Integer) {
@@ -94,8 +104,14 @@ global with sharing class SalesforceGridDataProvider
         }
         if (cfg.recordLimit == null || cfg.recordLimit <= 0) {
             cfg.recordLimit = 100;
-        } else if (cfg.recordLimit > 2000) {
-            cfg.recordLimit = 2000;
+        } else if (cfg.recordLimit > MAX_RECORDS) {
+            cfg.recordLimit = MAX_RECORDS;
+        }
+        if (String.isNotBlank(cfg.parentMatchColumn) && String.isBlank(cfg.parentMatchField)) {
+            cfg.parentMatchField = 'Id';
+        }
+        if (cfg.autoPopulateParent == true && String.isBlank(cfg.parentMatchColumn)) {
+            throw new ProviderException('parentMatchColumn is required when autoPopulateParent is enabled.');
         }
 
         return cfg;
@@ -107,89 +123,119 @@ global with sharing class SalesforceGridDataProvider
         appcg.GridDataProviderTypesV1.ProviderContext context
     ) {
         SalesforceConfig cfg = parseConfig(context);
-        try {
-            SalesforceClient client = new SalesforceClient();
 
-            // 1. Fetch Remote SObject describe metadata
-            Map<String, Object> describeRes = client.describeSObject(cfg.sObjectName);
-            Map<String, RemoteFieldMeta> fieldMetaMap = parseDescribeFields(describeRes);
+        SalesforceClient client = new SalesforceClient();
 
-            // 2. Resolve requested fields list
-            List<String> fieldList = resolveFieldList(cfg.fields, fieldMetaMap);
+        Map<String, Object> describeRes = client.describeSObject(cfg.sObjectName);
+        Map<String, RemoteFieldMeta> fieldMetaMap = parseDescribeFields(describeRes);
+        List<String> fieldList = resolveFieldList(cfg.fields, fieldMetaMap);
+        String parentColumn = resolveParentMatchColumn(cfg, fieldMetaMap, context);
 
-            // 3. Query remote records
-            String soql = buildSoqlQuery(cfg.sObjectName, fieldList, cfg.whereClause, cfg.orderBy, cfg.recordLimit);
-            Map<String, Object> queryRes = client.query(soql);
-            List<Object> rawRecords = (List<Object>) queryRes.get('records');
-
-            cachedRecords = parseRecords(rawRecords, fieldList);
-
-            appcg.GridDataProviderTypesV1.Capabilities capabilities = new appcg.GridDataProviderTypesV1.Capabilities();
-            capabilities.supportedFeatures = new Set<String>{
-                'SEARCH', 'REFRESH', 'ADD', 'EDIT', 'DELETE', 'DOWNLOAD_CSV'
-            };
-            capabilities.supportedRowActions = new Set<String>{ 'DELETE' };
-            capabilities.supportsServerPagination = false;
-            capabilities.columns = buildColumnDefinitions(fieldList, fieldMetaMap);
-            return capabilities;
-        } finally {
+        appcg.GridDataProviderTypesV1.Capabilities capabilities = new appcg.GridDataProviderTypesV1.Capabilities();
+        capabilities.supportedFeatures = new Set<String>{
+            'SEARCH', 'REFRESH', 'ADD', 'EDIT', 'DELETE', 'DOWNLOAD_CSV'
+        };
+        capabilities.supportedRowActions = new Set<String>{ 'DELETE' };
+        capabilities.supportsServerPagination = true;
+        capabilities.maxPageSize = MAX_PAGE_SIZE;
+        capabilities.columns = buildColumnDefinitions(fieldList, fieldMetaMap);
+        if (cfg.autoPopulateParent == true && parentColumn != null) {
+            for (appcg.GridDataProviderTypesV1.ColumnDefinition column : capabilities.columns) {
+                if (column.id.equalsIgnoreCase(parentColumn)) {
+                    column.isReadOnly = true;
+                }
+            }
         }
+        return capabilities;
     }
 
     global appcg.GridDataProviderTypesV1.PageResult getData(
         appcg.GridDataProviderTypesV1.QueryRequest request
     ) {
-        try {
-            List<Map<String, Object>> records;
-            appcg__Grid_Definition__c gridDef = getGridDefinition(request?.context);
-            String paginationType = gridDef?.appcg__Pagination_Type__c;
-            Integer recordLimit = (gridDef?.appcg__Record_Limit__c != null && gridDef.appcg__Record_Limit__c > 0)
-                ? (Integer) gridDef.appcg__Record_Limit__c
-                : 100;
+        SalesforceConfig cfg = parseConfig(request?.context);
+        appcg__Grid_Definition__c gridDef = getGridDefinition(request?.context);
+        String paginationType = gridDef?.appcg__Pagination_Type__c;
+        Boolean clientSide = paginationType == 'Client-Side';
+        Integer requestedPageSize = (request?.pageSize != null && request.pageSize > 0)
+            ? request.pageSize
+            : (gridDef?.appcg__Page_Size__c != null ? Integer.valueOf(gridDef.appcg__Page_Size__c) : 20);
+        Integer pageSize = clientSide ? cfg.recordLimit : Math.min(requestedPageSize, MAX_PAGE_SIZE);
+        Integer startIndex = clientSide ? 0 : Math.max(0, request?.startIndex ?? 0);
+        Boolean searching = String.isNotBlank(request?.searchTerm);
 
-            Integer pageSize;
-            Integer requestedPageSize = (request.pageSize != null && request.pageSize > 0)
-                ? request.pageSize
-                : (gridDef?.appcg__Page_Size__c != null ? Integer.valueOf(gridDef.appcg__Page_Size__c) : 20);
-            if (paginationType == 'Client-Side') {
-                pageSize = Math.min(recordLimit, 2000);
-            } else {
-                pageSize = (gridDef?.appcg__Record_Limit__c != null && gridDef.appcg__Record_Limit__c > 0)
-                    ? Math.min(requestedPageSize, (Integer) gridDef.appcg__Record_Limit__c)
-                    : Math.min(requestedPageSize, 2000);
-            }
+        SalesforceClient client = new SalesforceClient();
+        Map<String, RemoteFieldMeta> fieldMetaMap = parseDescribeFields(client.describeSObject(cfg.sObjectName));
+        List<String> fieldList = resolveFieldList(cfg.fields, fieldMetaMap);
+        String parentColumn = resolveParentMatchColumn(cfg, fieldMetaMap, request?.context);
+        String parentValue = parentColumn == null ? null : resolveParentMatchValue(cfg, request.context);
 
-            if (cachedRecords != null) {
-                records = cachedRecords;
-                cachedRecords = null;
-            } else {
-                SalesforceConfig cfg = parseConfig(request.context);
-                SalesforceClient client = new SalesforceClient();
-                Map<String, Object> describeRes = client.describeSObject(cfg.sObjectName);
-                Map<String, RemoteFieldMeta> fieldMetaMap = parseDescribeFields(describeRes);
-                List<String> fieldList = resolveFieldList(cfg.fields, fieldMetaMap);
-
-                String soql = buildSoqlQuery(cfg.sObjectName, fieldList, cfg.whereClause, cfg.orderBy, pageSize);
-                Map<String, Object> queryRes = client.query(soql);
-                List<Object> rawRecords = (List<Object>) queryRes.get('records');
-                records = parseRecords(rawRecords, fieldList);
-            }
-
-            while (records != null && records.size() > pageSize) {
-                records.remove(records.size() - 1);
-            }
-
-            // Apply client-side search filter
-            if (String.isNotBlank(request.searchTerm)) {
-                records = filterBySearch(records, request.searchTerm);
-            }
-
-            appcg.GridDataProviderTypesV1.PageResult result = new appcg.GridDataProviderTypesV1.PageResult();
-            result.records = records;
-            result.totalCount = records.size();
+        appcg.GridDataProviderTypesV1.PageResult result = new appcg.GridDataProviderTypesV1.PageResult();
+        result.records = new List<Map<String, Object>>();
+        if (parentColumn != null && String.isBlank(parentValue)) {
+            result.totalCount = 0;
             return result;
-        } finally {
         }
+
+        String whereClause = cfg.whereClause;
+        if (parentColumn != null) {
+            String predicate = parentColumn + ' = \'' + String.escapeSingleQuotes(parentValue) + '\'';
+            whereClause = String.isBlank(whereClause)
+                ? predicate : '(' + whereClause + ') AND ' + predicate;
+        }
+
+        String orderBy = String.isBlank(cfg.orderBy) ? 'Id ASC' : cfg.orderBy;
+        if (!Pattern.compile('(?i)(^|,)\\s*Id\\s*(ASC|DESC)?\\s*(,|$)').matcher(orderBy).find()) {
+            orderBy += ', Id ASC';
+        }
+        String soql = buildSoqlQuery(cfg.sObjectName, fieldList, whereClause, orderBy, cfg.recordLimit);
+        Map<String, Object> response = client.query(soql);
+        Integer totalCount = response.get('totalSize') == null
+            ? 0 : Math.min(cfg.recordLimit, Integer.valueOf(String.valueOf(response.get('totalSize'))));
+        if (!clientSide && !searching && startIndex >= totalCount) {
+            result.totalCount = totalCount;
+            return result;
+        }
+        Integer index = 0;
+        Integer endIndex = startIndex >= cfg.recordLimit
+            ? cfg.recordLimit : Math.min(cfg.recordLimit, startIndex + pageSize);
+        Boolean fetchAll = clientSide || searching;
+        Integer matchedCount = 0;
+        String lowerSearch = searching ? request.searchTerm.toLowerCase() : null;
+        while (response != null) {
+            List<Object> batch = (List<Object>) response.get('records');
+            if (batch != null) {
+                for (Object rawRecord : batch) {
+                    if (index >= cfg.recordLimit) break;
+                    if (searching) {
+                        Map<String, Object> row = parseRecords(new List<Object>{ rawRecord }, fieldList)[0];
+                        if (recordMatchesSearch(row, lowerSearch)) {
+                            if (clientSide || (matchedCount >= startIndex && matchedCount < endIndex)) {
+                                result.records.add(row);
+                            }
+                            matchedCount++;
+                        }
+                    } else if (clientSide || (index >= startIndex && index < endIndex)) {
+                        result.records.addAll(parseRecords(new List<Object>{ rawRecord }, fieldList));
+                    }
+                    index++;
+                }
+            }
+            if (index >= cfg.recordLimit || (!fetchAll && index >= endIndex) || response.get('done') == true) {
+                break;
+            }
+            String nextUrl = (String) response.get('nextRecordsUrl');
+            if (String.isBlank(nextUrl)) {
+                throw new ProviderException('Salesforce query ended without a query locator.');
+            }
+            response = client.queryMore(nextUrl);
+        }
+
+        if (searching) {
+            totalCount = matchedCount;
+        }
+
+        result.totalCount = totalCount;
+        return result;
     }
 
     // ─── GridDataMutationProviderV1 ───────────────────────────────────
@@ -198,36 +244,61 @@ global with sharing class SalesforceGridDataProvider
         appcg.GridDataProviderTypesV1.SaveRequest request
     ) {
         SalesforceConfig cfg = parseConfig(request.context);
-        try {
-            SalesforceClient client = new SalesforceClient();
-            Map<String, Object> describeRes = client.describeSObject(cfg.sObjectName);
-            Map<String, RemoteFieldMeta> fieldMetaMap = parseDescribeFields(describeRes);
 
-            List<Map<String, Object>> saved = new List<Map<String, Object>>();
-
-            for (Map<String, Object> record : request.records) {
-                String recId = (String) record.get('Id');
-                Map<String, Object> cleanFields = filterWritableFields(record, fieldMetaMap);
-
-                if (String.isBlank(recId)) {
-                    // Create
-                    Map<String, Object> createRes = client.createRecord(cfg.sObjectName, cleanFields);
-                    String newId = (String) createRes.get('id');
-                    Map<String, Object> createdRow = new Map<String, Object>(record);
-                    createdRow.put('Id', newId);
-                    saved.add(createdRow);
-                } else {
-                    // Update
-                    client.updateRecord(cfg.sObjectName, recId, cleanFields);
-                    saved.add(record);
-                }
+        SalesforceClient client = new SalesforceClient();
+        Map<String, Object> describeRes = client.describeSObject(cfg.sObjectName);
+        Map<String, RemoteFieldMeta> fieldMetaMap = parseDescribeFields(describeRes);
+        String parentColumn = resolveParentMatchColumn(cfg, fieldMetaMap, request.context);
+        String parentValue = null;
+        Boolean hasNewRecords = false;
+        for (Map<String, Object> record : request.records) {
+            String recordId = record.get('Id') == null ? null : String.valueOf(record.get('Id'));
+            if (String.isBlank(recordId) || recordId.startsWith('TEMP_')) {
+                hasNewRecords = true;
+                break;
             }
-
-            appcg.GridDataProviderTypesV1.SaveResult result = new appcg.GridDataProviderTypesV1.SaveResult();
-            result.records = saved;
-            return result;
-        } finally {
         }
+        if (hasNewRecords && cfg.autoPopulateParent == true && parentColumn != null) {
+            parentValue = resolveParentMatchValue(cfg, request.context);
+            if (String.isBlank(parentValue)) {
+                throw new ProviderException(
+                    'The current parent record has no value for ' + cfg.parentMatchField + '.'
+                );
+            }
+            if (fieldMetaMap.get(parentColumn.toLowerCase()).createable != true) {
+                throw new ProviderException('Parent match column "' + parentColumn + '" is not createable.');
+            }
+        }
+
+        List<Map<String, Object>> saved = new List<Map<String, Object>>();
+
+        for (Map<String, Object> record : request.records) {
+            String recId = record.get('Id') == null ? null : String.valueOf(record.get('Id'));
+            Map<String, Object> cleanFields = filterWritableFields(record, fieldMetaMap);
+
+            if (String.isBlank(recId) || recId.startsWith('TEMP_')) {
+                // Create
+                if (parentValue != null) {
+                    cleanFields.put(parentColumn, parentValue);
+                }
+                Map<String, Object> createRes = client.createRecord(cfg.sObjectName, cleanFields);
+                String newId = (String) createRes.get('id');
+                Map<String, Object> createdRow = new Map<String, Object>(record);
+                createdRow.put('Id', newId);
+                if (parentValue != null) {
+                    createdRow.put(parentColumn, parentValue);
+                }
+                saved.add(createdRow);
+            } else {
+                // Update
+                client.updateRecord(cfg.sObjectName, recId, cleanFields);
+                saved.add(record);
+            }
+        }
+
+        appcg.GridDataProviderTypesV1.SaveResult result = new appcg.GridDataProviderTypesV1.SaveResult();
+        result.records = saved;
+        return result;
     }
 
     global void deleteRecords(appcg.GridDataProviderTypesV1.DeleteRequest request) {
@@ -235,14 +306,12 @@ global with sharing class SalesforceGridDataProvider
             return;
         }
         SalesforceConfig cfg = parseConfig(request.context);
-        try {
-            SalesforceClient client = new SalesforceClient();
-            for (String recId : request.recordIds) {
-                if (String.isNotBlank(recId)) {
-                    client.deleteRecord(cfg.sObjectName, recId);
-                }
+
+        SalesforceClient client = new SalesforceClient();
+        for (String recId : request.recordIds) {
+            if (String.isNotBlank(recId)) {
+                client.deleteRecord(cfg.sObjectName, recId);
             }
-        } finally {
         }
     }
 
@@ -326,6 +395,66 @@ global with sharing class SalesforceGridDataProvider
             }
         }
         return listFields;
+    }
+
+    @TestVisible
+    private static String resolveParentMatchColumn(
+        SalesforceConfig cfg,
+        Map<String, RemoteFieldMeta> fieldMetaMap,
+        appcg.GridDataProviderTypesV1.ProviderContext context
+    ) {
+        if (context == null || String.isBlank(context.parentId) || String.isBlank(cfg.parentMatchColumn)) {
+            return null;
+        }
+        RemoteFieldMeta meta = fieldMetaMap.get(cfg.parentMatchColumn.toLowerCase());
+        if (meta == null) {
+            throw new ProviderException(
+                'Parent match column "' + cfg.parentMatchColumn + '" was not found on remote ' + cfg.sObjectName + '.'
+            );
+        }
+        return meta.name;
+    }
+
+    @TestVisible
+    private static String resolveParentMatchValue(
+        SalesforceConfig cfg,
+        appcg.GridDataProviderTypesV1.ProviderContext context
+    ) {
+        if (context == null || String.isBlank(context.parentId)) {
+            return null;
+        }
+        String requestedField = String.isBlank(cfg.parentMatchField) ? 'Id' : cfg.parentMatchField.trim();
+        if ('Id'.equalsIgnoreCase(requestedField)) {
+            return context.parentId;
+        }
+        try {
+            Id parentRecordId = (Id) context.parentId;
+            Schema.DescribeSObjectResult parentDescribe = parentRecordId.getSObjectType().getDescribe();
+            String fieldApiName;
+            for (String candidate : parentDescribe.fields.getMap().keySet()) {
+                if (candidate.equalsIgnoreCase(requestedField)) {
+                    fieldApiName = candidate;
+                    break;
+                }
+            }
+            if (fieldApiName == null) {
+                throw new ProviderException(
+                    'Parent match field "' + requestedField + '" does not exist on ' + parentDescribe.getName() + '.'
+                );
+            }
+            String query = 'SELECT ' + fieldApiName + ' FROM ' + parentDescribe.getName() +
+                ' WHERE Id = :parentRecordId WITH USER_MODE LIMIT 1';
+            List<SObject> parents = Database.query(query);
+            if (parents.isEmpty()) {
+                return null;
+            }
+            Object value = parents[0].get(fieldApiName);
+            return value == null ? null : String.valueOf(value);
+        } catch (ProviderException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ProviderException('Unable to resolve the parent match value: ' + e.getMessage());
+        }
     }
 
     @TestVisible
@@ -454,22 +583,14 @@ global with sharing class SalesforceGridDataProvider
         return 'TEXT';
     }
 
-    private static List<Map<String, Object>> filterBySearch(
-        List<Map<String, Object>> records,
-        String searchTerm
-    ) {
-        String lower = searchTerm.toLowerCase();
-        List<Map<String, Object>> filtered = new List<Map<String, Object>>();
-        for (Map<String, Object> record : records) {
-            for (String key : record.keySet()) {
-                if ('Id'.equalsIgnoreCase(key)) continue;
-                Object val = record.get(key);
-                if (val != null && String.valueOf(val).toLowerCase().contains(lower)) {
-                    filtered.add(record);
-                    break;
-                }
+    private static Boolean recordMatchesSearch(Map<String, Object> record, String lowerSearch) {
+        for (String key : record.keySet()) {
+            if ('Id'.equalsIgnoreCase(key)) continue;
+            Object val = record.get(key);
+            if (val != null && String.valueOf(val).toLowerCase().contains(lowerSearch)) {
+                return true;
             }
         }
-        return filtered;
+        return false;
     }
 }
