@@ -1,7 +1,6 @@
 @IsTest
 private class SalesforceClientTest {
     private static SalesforceTestSupport.SingleResponseMock arrange(String responseBody) {
-
         SalesforceTestSupport.SingleResponseMock mock = new SalesforceTestSupport.SingleResponseMock();
         mock.statusCode = 200;
         mock.body = responseBody;
@@ -21,6 +20,23 @@ private class SalesforceClientTest {
         System.assert(mock.lastEndpoint.contains('/services/data/v61.0/query/?q='), mock.lastEndpoint);
         List<Object> records = (List<Object>) result.get('records');
         System.assertEquals(1, records.size());
+    }
+
+    @IsTest
+    static void queryMore_usesQueryLocator() {
+        SalesforceTestSupport.SingleResponseMock mock = arrange(
+            '{"totalSize":2,"done":true,"records":[{"Id":"003000000000002"}]}'
+        );
+
+        Test.startTest();
+        Map<String, Object> result = new SalesforceClient().queryMore(
+            '/services/data/v61.0/query/01gLocator-2000'
+        );
+        Test.stopTest();
+
+        System.assertEquals('GET', mock.lastMethod);
+        System.assert(mock.lastEndpoint.endsWith('/services/data/v61.0/query/01gLocator-2000'));
+        System.assertEquals(true, result.get('done'));
     }
 
     @IsTest
