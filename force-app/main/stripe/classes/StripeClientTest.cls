@@ -24,6 +24,19 @@ private class StripeClientTest {
     }
 
     @IsTest
+    static void listResources_filtersByCustomer() {
+        StripeTestSupport.SingleResponseMock mock = arrange('{"object":"list","data":[]}');
+
+        Test.startTest();
+        new StripeClient().listResources('charges', 100, 'ch_1', 'cus_1');
+        Test.stopTest();
+
+        System.assert(mock.lastEndpoint.contains(
+            '/v1/charges?limit=100&starting_after=ch_1&customer=cus_1'
+        ), mock.lastEndpoint);
+    }
+
+    @IsTest
     static void getResource_dispatchesGet() {
         StripeTestSupport.SingleResponseMock mock = arrange('{"id":"cus_123","name":"John Doe"}');
 

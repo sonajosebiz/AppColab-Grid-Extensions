@@ -12,13 +12,22 @@ public with sharing class StripeClient {
     }
 
     /**
-     * List records of a given Stripe resource (customers, invoices, subscriptions, charges).
+     * List records of a given Stripe resource (customers, invoices, subscriptions, charges, payment_intents).
      * GET /v1/{resource}
      */
     public Map<String, Object> listResources(
         String resource,
         Integer limitCount,
         String startingAfter
+    ) {
+        return listResources(resource, limitCount, startingAfter, null);
+    }
+
+    public Map<String, Object> listResources(
+        String resource,
+        Integer limitCount,
+        String startingAfter,
+        String customerId
     ) {
         String path = '/v1/' + enc(resource);
         List<String> queryParams = new List<String>();
@@ -27,6 +36,9 @@ public with sharing class StripeClient {
         }
         if (String.isNotBlank(startingAfter)) {
             queryParams.add('starting_after=' + enc(startingAfter));
+        }
+        if (String.isNotBlank(customerId)) {
+            queryParams.add('customer=' + enc(customerId));
         }
         if (!queryParams.isEmpty()) {
             path += '?' + String.join(queryParams, '&');

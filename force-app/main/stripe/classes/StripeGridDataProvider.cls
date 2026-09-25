@@ -12,6 +12,8 @@ global with sharing class StripeGridDataProvider
     @TestVisible
     private class StripeConfig {
         public String resource;
+        public String parentMatchColumn;
+        public String parentMatchField;
     }
 
     @TestVisible
@@ -51,9 +53,16 @@ global with sharing class StripeGridDataProvider
                 if (parsed != null && String.isNotBlank(parsed.resource)) {
                     cfg.resource = parsed.resource.trim().toLowerCase();
                 }
+                if (parsed != null) {
+                    cfg.parentMatchColumn = parsed.parentMatchColumn?.trim();
+                    cfg.parentMatchField = parsed.parentMatchField?.trim();
+                }
             } catch (Exception e) {
                 throw new ProviderException('Invalid Stripe provider configuration: ' + e.getMessage());
             }
+        }
+        if (String.isNotBlank(cfg.parentMatchColumn) && String.isBlank(cfg.parentMatchField)) {
+            cfg.parentMatchField = 'Id';
         }
         return cfg;
     }
@@ -65,11 +74,14 @@ global with sharing class StripeGridDataProvider
     ) {
         StripeConfig cfg = parseConfig(context);
         try {
-            StripeClient client = new StripeClient();
-            Map<String, Object> response = client.listResources(cfg.resource, 100, null);
-            List<Object> rawList = (List<Object>) response.get('data');
-
-            cachedRecords = parseStripeRecords(cfg.resource, rawList);
+            cachedRecords = null;
+            if (String.isBlank(cfg.parentMatchColumn) || context == null || String.isBlank(context.parentId)) {
+                StripeClient client = new StripeClient();
+                Map<String, Object> response = client.listResources(cfg.resource, 100, null);
+                cachedRecords = parseStripeRecords(cfg.resource, (List<Object>) response.get('data'));
+            } else {
+                validateParentMatchColumn(cfg);
+            }
 
             appcg.GridDataProviderTypesV1.Capabilities capabilities = new appcg.GridDataProviderTypesV1.Capabilities();
             if ('customers'.equals(cfg.resource)) {
@@ -101,6 +113,12 @@ global with sharing class StripeGridDataProvider
         appcg.GridDataProviderTypesV1.QueryRequest request
     ) {
         try {
+            StripeConfig cfg = parseConfig(request?.context);
+            if (String.isNotBlank(cfg.parentMatchColumn) && request?.context != null &&
+                String.isNotBlank(request.context.parentId)) {
+                cachedRecords = null;
+                return getParentFilteredData(request, cfg);
+            }
             List<Map<String, Object>> records;
             Integer totalCount;
 
@@ -128,7 +146,6 @@ global with sharing class StripeGridDataProvider
                 cachedRecords = null;
                 totalCount = records.size();
             } else {
-                StripeConfig cfg = parseConfig(request.context);
                 StripeClient client = new StripeClient();
 
                 // Fetch requested page chunk
@@ -232,6 +249,136 @@ global with sharing class StripeGridDataProvider
 
     // ─── Helpers ──────────────────────────────────────────────────────
 
+    private static appcg.GridDataProviderTypesV1.PageResult getParentFilteredData(
+        appcg.GridDataProviderTypesV1.QueryRequest request,
+        StripeConfig cfg
+    ) {
+        String matchColumn = validateParentMatchColumn(cfg);
+        String parentValue = resolveParentMatchValue(cfg, request.context);
+        appcg.GridDataProviderTypesV1.PageResult result = new appcg.GridDataProviderTypesV1.PageResult();
+        result.records = new List<Map<String, Object>>();
+        result.totalCount = 0;
+        if (String.isBlank(parentValue)) {
+            return result;
+        }
+
+        appcg__Grid_Definition__c gridDef = getGridDefinition(request.context);
+        Integer recordLimit = (gridDef?.appcg__Record_Limit__c != null && gridDef.appcg__Record_Limit__c > 0)
+            ? (Integer) gridDef.appcg__Record_Limit__c : 100;
+        Boolean clientSide = gridDef?.appcg__Pagination_Type__c == 'Client-Side';
+        Integer requestedPageSize = (request.pageSize != null && request.pageSize > 0)
+            ? request.pageSize
+            : (gridDef?.appcg__Page_Size__c != null ? Integer.valueOf(gridDef.appcg__Page_Size__c) : 20);
+        Integer pageSize = clientSide ? Math.min(recordLimit, 100) : Math.min(requestedPageSize, 100);
+        Integer startIndex = clientSide ? 0 : (request.startIndex == null ? 0 : Math.max(0, request.startIndex));
+        String searchTerm = String.isBlank(request.searchTerm) ? null : request.searchTerm.toLowerCase();
+        String customerId = matchColumn == 'customer' &&
+            new Set<String>{ 'charges', 'invoices', 'subscriptions', 'payment_intents' }.contains(cfg.resource)
+            ? parentValue.trim() : null;
+
+        StripeClient client = new StripeClient();
+        String startingAfter;
+        Boolean hasMore = true;
+        Integer matchedCount = 0;
+        while (hasMore && matchedCount < recordLimit) {
+            if (Limits.getCallouts() >= Limits.getLimitCallouts()) {
+                throw new ProviderException('Stripe parent filter exceeded the available callouts. Narrow the Stripe data or use a customer ID match.');
+            }
+            Map<String, Object> response = client.listResources(cfg.resource, 100, startingAfter, customerId);
+            List<Object> rawList = (List<Object>) response.get('data');
+            if (rawList == null || rawList.isEmpty()) {
+                break;
+            }
+            for (Map<String, Object> record : parseStripeRecords(cfg.resource, rawList)) {
+                Object value = record.get(matchColumn);
+                if (value == null || !parentValuesMatch(String.valueOf(value), parentValue, matchColumn)) {
+                    continue;
+                }
+                if (searchTerm != null && filterBySearch(new List<Map<String, Object>>{ record }, searchTerm).isEmpty()) {
+                    continue;
+                }
+                if (matchedCount >= startIndex && matchedCount < startIndex + pageSize) {
+                    result.records.add(record);
+                }
+                matchedCount++;
+                if (matchedCount >= recordLimit) {
+                    break;
+                }
+            }
+            hasMore = response.get('has_more') == true;
+            Map<String, Object> lastRawRecord = (Map<String, Object>) rawList[rawList.size() - 1];
+            startingAfter = lastRawRecord.get('id') == null ? null : String.valueOf(lastRawRecord.get('id'));
+            if (hasMore && String.isBlank(startingAfter)) {
+                throw new ProviderException('Stripe returned a page without a cursor for the parent filter.');
+            }
+        }
+        result.totalCount = clientSide ? result.records.size() : matchedCount;
+        return result;
+    }
+
+    private static String validateParentMatchColumn(StripeConfig cfg) {
+        for (appcg.GridDataProviderTypesV1.ColumnDefinition column : buildColumnDefinitions(cfg.resource)) {
+            if (column.id.equalsIgnoreCase(cfg.parentMatchColumn)) {
+                return column.id;
+            }
+        }
+        throw new ProviderException(
+            'Parent match column "' + cfg.parentMatchColumn + '" is not available for Stripe ' + cfg.resource + '.'
+        );
+    }
+
+    private static Boolean parentValuesMatch(String stripeValue, String parentValue, String column) {
+        String left = stripeValue == null ? null : stripeValue.trim();
+        String right = parentValue == null ? null : parentValue.trim();
+        if (String.isBlank(left) || String.isBlank(right)) {
+            return false;
+        }
+        return column == 'email' || column == 'customer_email' || column == 'receipt_email'
+            ? left.equalsIgnoreCase(right) : left.equals(right);
+    }
+
+    @TestVisible
+    private static String resolveParentMatchValue(
+        StripeConfig cfg,
+        appcg.GridDataProviderTypesV1.ProviderContext context
+    ) {
+        if (context == null || String.isBlank(context.parentId)) {
+            return null;
+        }
+        String requestedField = String.isBlank(cfg.parentMatchField) ? 'Id' : cfg.parentMatchField.trim();
+        if ('Id'.equalsIgnoreCase(requestedField)) {
+            return context.parentId;
+        }
+        try {
+            Id parentRecordId = (Id) context.parentId;
+            Schema.DescribeSObjectResult parentDescribe = parentRecordId.getSObjectType().getDescribe();
+            String fieldApiName;
+            for (String candidate : parentDescribe.fields.getMap().keySet()) {
+                if (candidate.equalsIgnoreCase(requestedField)) {
+                    fieldApiName = candidate;
+                    break;
+                }
+            }
+            if (fieldApiName == null) {
+                throw new ProviderException(
+                    'Parent match field "' + requestedField + '" does not exist on ' + parentDescribe.getName() + '.'
+                );
+            }
+            String query = 'SELECT ' + fieldApiName + ' FROM ' + parentDescribe.getName() +
+                ' WHERE Id = :parentRecordId WITH USER_MODE LIMIT 1';
+            List<SObject> parents = Database.query(query);
+            if (parents.isEmpty()) {
+                return null;
+            }
+            Object value = parents[0].get(fieldApiName);
+            return value == null ? null : String.valueOf(value);
+        } catch (ProviderException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ProviderException('Unable to resolve the parent match value: ' + e.getMessage());
+        }
+    }
+
     @TestVisible
     private static List<Map<String, Object>> parseStripeRecords(
         String resource,
@@ -256,6 +403,7 @@ global with sharing class StripeGridDataProvider
                 row.put('created', formatTimestamp(item.get('created')));
             } else if ('invoices'.equals(resource)) {
                 row.put('number', item.get('number') == null ? '' : String.valueOf(item.get('number')));
+                row.put('customer', item.get('customer') == null ? '' : String.valueOf(item.get('customer')));
                 row.put('customer_name', item.get('customer_name') == null ? '' : String.valueOf(item.get('customer_name')));
                 row.put('customer_email', item.get('customer_email') == null ? '' : String.valueOf(item.get('customer_email')));
                 row.put('status', item.get('status') == null ? '' : String.valueOf(item.get('status')));
@@ -276,9 +424,25 @@ global with sharing class StripeGridDataProvider
                 row.put('currency', item.get('currency') == null ? '' : String.valueOf(item.get('currency')).toUpperCase());
                 row.put('status', item.get('status') == null ? '' : String.valueOf(item.get('status')));
                 row.put('customer', item.get('customer') == null ? '' : String.valueOf(item.get('customer')));
+                Map<String, Object> billingDetails = item.get('billing_details') instanceof Map<String, Object>
+                    ? (Map<String, Object>) item.get('billing_details') : null;
+                Object customerEmail = billingDetails?.get('email');
+                if (customerEmail == null || String.isBlank(String.valueOf(customerEmail))) {
+                    customerEmail = item.get('receipt_email');
+                }
+                row.put('customer_email', customerEmail == null ? '' : String.valueOf(customerEmail));
                 row.put('description', item.get('description') == null ? '' : String.valueOf(item.get('description')));
                 row.put('paid', item.get('paid') == true ? 'true' : 'false');
                 row.put('refunded', item.get('refunded') == true ? 'true' : 'false');
+                row.put('created', formatTimestamp(item.get('created')));
+            } else if ('payment_intents'.equals(resource)) {
+                row.put('amount', formatAmount(item.get('amount')));
+                row.put('amount_received', formatAmount(item.get('amount_received')));
+                row.put('currency', item.get('currency') == null ? '' : String.valueOf(item.get('currency')).toUpperCase());
+                row.put('status', item.get('status') == null ? '' : String.valueOf(item.get('status')));
+                row.put('customer', item.get('customer') == null ? '' : String.valueOf(item.get('customer')));
+                row.put('receipt_email', item.get('receipt_email') == null ? '' : String.valueOf(item.get('receipt_email')));
+                row.put('description', item.get('description') == null ? '' : String.valueOf(item.get('description')));
                 row.put('created', formatTimestamp(item.get('created')));
             } else {
                 // Generic fallback
@@ -349,6 +513,7 @@ global with sharing class StripeGridDataProvider
             columns.add(column('created', 'Created Date', 'DATETIME', true, true, '160px'));
         } else if ('invoices'.equals(resource)) {
             columns.add(column('number', 'Invoice Number', 'TEXT', true, true, '130px'));
+            columns.add(column('customer', 'Customer', 'TEXT', true, false, '140px'));
             columns.add(column('customer_name', 'Name', 'TEXT', true, true, null));
             columns.add(column('customer_email', 'Email', 'TEXT', true, true, null));
             columns.add(column('status', 'Status', 'TEXT', true, true, '100px'));
@@ -369,9 +534,19 @@ global with sharing class StripeGridDataProvider
             columns.add(column('currency', 'Currency', 'TEXT', true, true, '80px'));
             columns.add(column('status', 'Status', 'TEXT', true, true, '100px'));
             columns.add(column('customer', 'Customer', 'TEXT', true, true, '140px'));
+            columns.add(column('customer_email', 'Customer Email', 'TEXT', true, true, null));
             columns.add(column('description', 'Description', 'TEXT', true, true, null));
             columns.add(column('paid', 'Paid', 'BOOLEAN', true, true, '80px'));
             columns.add(column('refunded', 'Refunded', 'BOOLEAN', true, true, '90px'));
+            columns.add(column('created', 'Created Date', 'DATETIME', true, true, '160px'));
+        } else if ('payment_intents'.equals(resource)) {
+            columns.add(column('amount', 'Amount', 'NUMBER', true, true, '100px'));
+            columns.add(column('amount_received', 'Amount Received', 'NUMBER', true, true, '120px'));
+            columns.add(column('currency', 'Currency', 'TEXT', true, true, '80px'));
+            columns.add(column('status', 'Status', 'TEXT', true, true, '120px'));
+            columns.add(column('customer', 'Customer', 'TEXT', true, true, '140px'));
+            columns.add(column('receipt_email', 'Receipt Email', 'TEXT', true, true, null));
+            columns.add(column('description', 'Description', 'TEXT', true, true, null));
             columns.add(column('created', 'Created Date', 'DATETIME', true, true, '160px'));
         }
         return columns;

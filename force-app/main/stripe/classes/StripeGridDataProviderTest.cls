@@ -224,4 +224,122 @@ private class StripeGridDataProviderTest {
         System.assertNotEquals('', StripeGridDataProvider.formatTimestamp(1609459200));
         System.assertEquals('', StripeGridDataProvider.formatTimestamp(null));
     }
+
+    @IsTest
+    static void charges_filterByContactCustomerId_beforePagination() {
+        Contact parent = new Contact(LastName = 'Stripe Customer', Department = 'cus_1');
+        insert parent;
+        StripeGridDataProvider.testGridDef = new appcg__Grid_Definition__c(
+            appcg__Data_Provider_Config__c = '{"resource":"charges","parentMatchColumn":"customer",' +
+                '"parentMatchField":"Department"}'
+        );
+        StripeTestSupport.RoutingMock mock = new StripeTestSupport.RoutingMock();
+        mock.byEndpointContains.put('/v1/charges?limit=100&customer=cus_1', StripeTestSupport.makeResponse(200,
+            '{"data":[{"id":"ch_other","customer":"cus_other"},' +
+            '{"id":"ch_1","customer":"cus_1"}],"has_more":true}'));
+        mock.byEndpointContains.put('starting_after=ch_1&customer=cus_1', StripeTestSupport.makeResponse(200,
+            '{"data":[{"id":"ch_2","customer":"cus_1"}],"has_more":false}'));
+        Test.setMock(HttpCalloutMock.class, mock);
+
+        appcg.GridDataProviderTypesV1.ProviderContext context = new appcg.GridDataProviderTypesV1.ProviderContext();
+        context.parentId = parent.Id;
+        StripeGridDataProvider provider = new StripeGridDataProvider();
+        appcg.GridDataProviderTypesV1.QueryRequest request = new appcg.GridDataProviderTypesV1.QueryRequest();
+        request.context = context;
+        request.startIndex = 1;
+        request.pageSize = 1;
+
+        Test.startTest();
+        provider.getCapabilities(context);
+        appcg.GridDataProviderTypesV1.PageResult page = provider.getData(request);
+        Test.stopTest();
+
+        System.assertEquals(2, page.totalCount);
+        System.assertEquals(1, page.records.size());
+        System.assertEquals('ch_2', page.records[0].get('Id'));
+        System.assertEquals(2, mock.endpointLog.size());
+        System.assert(mock.endpointLog[0].contains('customer=cus_1'));
+    }
+
+    @IsTest
+    static void charges_filterByContactEmail_andMissingValue() {
+        Contact parent = new Contact(LastName = 'Stripe Email', Email = 'alice@test.com');
+        insert parent;
+        StripeGridDataProvider.testGridDef = new appcg__Grid_Definition__c(
+            appcg__Data_Provider_Config__c = '{"resource":"charges","parentMatchColumn":"customer_email",' +
+                '"parentMatchField":"Email"}'
+        );
+        StripeTestSupport.RoutingMock mock = new StripeTestSupport.RoutingMock();
+        mock.byEndpointContains.put('/v1/charges', StripeTestSupport.makeResponse(200,
+            '{"data":[{"id":"ch_1","billing_details":{"email":"ALICE@TEST.COM"}},' +
+            '{"id":"ch_2","receipt_email":"alice@test.com"},' +
+            '{"id":"ch_3","receipt_email":"bob@test.com"}],"has_more":false}'));
+        Test.setMock(HttpCalloutMock.class, mock);
+
+        appcg.GridDataProviderTypesV1.ProviderContext context = new appcg.GridDataProviderTypesV1.ProviderContext();
+        context.parentId = parent.Id;
+        appcg.GridDataProviderTypesV1.QueryRequest request = new appcg.GridDataProviderTypesV1.QueryRequest();
+        request.context = context;
+
+        Test.startTest();
+        appcg.GridDataProviderTypesV1.PageResult page = new StripeGridDataProvider().getData(request);
+        Test.stopTest();
+
+        System.assertEquals(2, page.totalCount);
+        System.assertEquals(2, page.records.size());
+        System.assertEquals('ch_1', page.records[0].get('Id'));
+        System.assertEquals('ch_2', page.records[1].get('Id'));
+
+        parent.Email = null;
+        update parent;
+        appcg.GridDataProviderTypesV1.PageResult emptyPage = new StripeGridDataProvider().getData(request);
+        System.assertEquals(0, emptyPage.totalCount);
+        System.assertEquals(1, mock.endpointLog.size());
+    }
+
+    @IsTest
+    static void paymentIntents_filterByReceiptEmail() {
+        Contact parent = new Contact(LastName = 'Stripe Intent', Email = 'alice@test.com');
+        insert parent;
+        StripeGridDataProvider.testGridDef = new appcg__Grid_Definition__c(
+            appcg__Data_Provider_Config__c = '{"resource":"payment_intents",' +
+                '"parentMatchColumn":"receipt_email","parentMatchField":"Email"}'
+        );
+        StripeTestSupport.RoutingMock mock = new StripeTestSupport.RoutingMock();
+        mock.byEndpointContains.put('/v1/payment_intents', StripeTestSupport.makeResponse(200,
+            '{"data":[{"id":"pi_1","customer":"cus_1","receipt_email":"alice@test.com",' +
+                '"amount":2500,"amount_received":2500,"currency":"usd","status":"succeeded"},' +
+            '{"id":"pi_2","receipt_email":"bob@test.com"}],"has_more":false}'));
+        Test.setMock(HttpCalloutMock.class, mock);
+
+        appcg.GridDataProviderTypesV1.ProviderContext context = new appcg.GridDataProviderTypesV1.ProviderContext();
+        context.parentId = parent.Id;
+        appcg.GridDataProviderTypesV1.QueryRequest request = new appcg.GridDataProviderTypesV1.QueryRequest();
+        request.context = context;
+
+        Test.startTest();
+        appcg.GridDataProviderTypesV1.Capabilities capabilities = new StripeGridDataProvider().getCapabilities(context);
+        appcg.GridDataProviderTypesV1.PageResult page = new StripeGridDataProvider().getData(request);
+        Test.stopTest();
+
+        System.assertEquals(9, capabilities.columns.size());
+        System.assertEquals(1, page.totalCount);
+        System.assertEquals('pi_1', page.records[0].get('Id'));
+        System.assertEquals('25.00', page.records[0].get('amount'));
+    }
+
+    @IsTest
+    static void parentFilter_rejectsUnknownStripeColumn() {
+        StripeGridDataProvider.testGridDef = new appcg__Grid_Definition__c(
+            appcg__Data_Provider_Config__c = '{"resource":"charges","parentMatchColumn":"unknown"}'
+        );
+        appcg.GridDataProviderTypesV1.ProviderContext context = new appcg.GridDataProviderTypesV1.ProviderContext();
+        context.parentId = '003000000000001AAA';
+        try {
+            new StripeGridDataProvider().getCapabilities(context);
+            System.assert(false, 'Expected invalid match column to be rejected');
+        } catch (StripeGridDataProvider.ProviderException e) {
+            System.assert(e.getMessage().contains('not available for Stripe charges'));
+        }
+    }
 }
