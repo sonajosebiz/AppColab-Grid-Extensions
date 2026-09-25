@@ -56,6 +56,20 @@ Every integration is self-contained and can be deployed independently. Its clien
 | Trello | `force-app/main/trello` | `TrelloGridDataProvider` | `Trello` |
 | Xero | `force-app/main/xero` | `XeroGridDataProvider` | `Xero` |
 
+### Stripe grids on a Salesforce record
+
+Set `parentMatchColumn` to the Stripe column and `parentMatchField` to a field on the Salesforce record containing the match value. When the grid is on a Contact, these configurations show that Contact's payments:
+
+```json
+{"resource":"charges","parentMatchColumn":"customer","parentMatchField":"Stripe_Customer_Id__c"}
+```
+
+```json
+{"resource":"charges","parentMatchColumn":"customer_email","parentMatchField":"Email"}
+```
+
+`charges.customer_email` uses the charge's billing email, falling back to its receipt email. For `payment_intents`, use `customer` for the Stripe customer ID or `receipt_email` for email matching. Invoices expose `customer` and `customer_email`. A record with an empty match field shows no rows. If `parentMatchField` is omitted, it defaults to the Salesforce record ID. Email matches ignore case; Stripe IDs match exactly. The Stripe record limit applies after matching. Customer ID matches use Stripe's customer filter; email matches scan Stripe pages and can reach Salesforce's callout limit on large accounts.
+
 Deploy one integration by passing its source folder:
 
 ```sh
