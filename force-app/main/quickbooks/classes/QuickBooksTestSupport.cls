@@ -38,9 +38,20 @@ public class QuickBooksTestSupport {
                     bestMatch = candidate;
                 }
             }
-            return bestMatch == null
-                ? makeResponse(404, '{"error":"No test route matched."}', 'Not Found')
-                : byEndpointContains.get(bestMatch);
+            if (bestMatch == null) return makeResponse(404, '{"error":"No test route matched."}', 'Not Found');
+            HttpResponse configured = byEndpointContains.get(bestMatch);
+            if (EncodingUtil.urlDecode(request.getEndpoint(), 'UTF-8').toLowerCase().contains('select count(*)')) {
+                Map<String, Object> body = (Map<String, Object>) JSON.deserializeUntyped(configured.getBody());
+                Map<String, Object> qr = (Map<String, Object>) body.get('QueryResponse');
+                Integer size = 0;
+                if (qr != null) {
+                    for (Object value : qr.values()) {
+                        if (value instanceof List<Object>) size = ((List<Object>) value).size();
+                    }
+                }
+                return makeResponse(200, '{"QueryResponse":{"totalCount":' + size + '}}');
+            }
+            return configured;
         }
     }
 
