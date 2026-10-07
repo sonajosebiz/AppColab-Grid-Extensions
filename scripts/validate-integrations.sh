@@ -7,6 +7,7 @@ validations=(
   "google-sheets:GoogleSheetsClientTest:GoogleSheetsGridDataProviderTest"
   "airtable:AirtableClientTest:AirtableGridDataProviderTest"
   "asana:AsanaClientTest:AsanaGridDataProviderTest"
+  "excel:ExcelClientTest:ExcelGridDataProviderTest"
   "gmail:GmailClientTest:GmailGridDataProviderTest"
   "google-analytics:GoogleAnalyticsClientTest:GoogleAnalyticsGridDataProviderTest"
   "hubspot:HubSpotClientTest:HubSpotGridDataProviderTest"

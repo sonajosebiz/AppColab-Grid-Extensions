@@ -11,6 +11,11 @@
         <members>AsanaGridDataProvider</members>
         <members>AsanaGridDataProviderTest</members>
         <members>AsanaTestSupport</members>
+        <members>ExcelClient</members>
+        <members>ExcelClientTest</members>
+        <members>ExcelGridDataProvider</members>
+        <members>ExcelGridDataProviderTest</members>
+        <members>ExcelTestSupport</members>
         <members>GmailClient</members>
         <members>GmailClientTest</members>
         <members>GmailGridDataProvider</members>
@@ -69,6 +74,7 @@
         <name>ApexClass</name>
     </types>
     <types>
+        <members>Excel_Microsoft_OAuth</members>
         <members>Gmail_Google_OAuth</members>
         <members>Google_Analytics_OAuth</members>
         <members>Google_OAuth</members>
@@ -78,6 +84,7 @@
     <types>
         <members>Airtable</members>
         <members>Asana</members>
+        <members>Excel_Graph</members>
         <members>Gmail_Google_APIs</members>
         <members>Google_APIs</members>
         <members>Google_Analytics_APIs</members>
@@ -94,6 +101,7 @@
     <types>
         <members>Airtable</members>
         <members>Asana</members>
+        <members>Excel</members>
         <members>Gmail</members>
         <members>Google_Analytics</members>
         <members>Google_Sheets</members>
@@ -110,6 +118,7 @@
     <types>
         <members>Airtable_Integration</members>
         <members>Asana_Integration</members>
+        <members>Excel_Integration</members>
         <members>Gmail_Integration</members>
         <members>GoogleAnalytics_Integration</members>
         <members>Google_Sheets_Integration</members>
