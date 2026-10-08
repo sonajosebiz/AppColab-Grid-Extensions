@@ -5,3 +5,7 @@
 node_modules/**
 **/jsconfig.json
 **/.eslintrc.json
+
+**/authproviders/**
+**/externalCredentials/**
+**/namedCredentials/**
