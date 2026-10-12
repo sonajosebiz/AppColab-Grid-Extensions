@@ -2,7 +2,9 @@
 
 Bring data from your spreadsheets, CRM, accounting tools, and other systems directly into Salesforce with AppColab Grid.
 
-**Get up and running with the systems under 30 mins**, provided AppColab Grid is installed and your external account credentials ready 😊. Each extension includes ready-to-deploy code and setup instructions to help you get your first grid running.
+**Get up and running with the systems under 30 mins**, provided AppColab Grid is installed and your external account credentials ready 😊. 
+
+Each extension includes ready-to-deploy code and setup instructions to help you get your first grid running.
 
 ## Get started
 
