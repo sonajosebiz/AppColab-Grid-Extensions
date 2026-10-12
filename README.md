@@ -37,6 +37,18 @@ sf project deploy start \
 
 For additional instructions to configure the extension follow the documentation in [AppColab Grid Guide](https://appcolab.com/guide/appcolab-grid/external-connections/google-sheets-grid-integration)
 
+## QuickBooks
+
+Set the grid's Data Provider Configuration to the QuickBooks company ID and entity. The provider supports invoices, customers, payments, items, bills, vendors, estimates, sales receipts, credit memos, purchase orders, accounts, deposits, journal entries, and purchases. Singular and plural resource names are accepted.
+
+```json
+{"realmId":"YOUR_COMPANY_ID","resource":"invoices","parentMatchColumn":"CustomerRef","parentMatchField":"QuickBooks_Customer_Id__c"}
+```
+
+`parentMatchColumn` is a filterable QuickBooks field. When the grid opens on a Salesforce record, the provider reads `parentMatchField` from that record and adds an equality predicate to both the count and page queries. If `parentMatchField` is omitted, the Salesforce record ID is used. An empty parent field shows no rows. Use the QuickBooks ID stored in Salesforce when matching a reference such as `CustomerRef` or `VendorRef`. The optional `where` or `whereClause` value is combined with the parent predicate using `AND`.
+
+Server pagination queries only the requested page, with a maximum page size of 1,000. Search scans QuickBooks pages up to the configured record limit so its total count and page offsets reflect all matches. The default record limit is 1,000 and the maximum is 10,000. The integration is read only.
+
 ## Other integrations
 
 Every integration is self-contained and can be deployed independently. Its client owns Named Credential callouts, JSON or form headers, a 60-second timeout, transient-error retry, and HTTP error handling. No integration depends on the unpackaged `APIClient`, integration custom metadata, logging classes, or test utilities from another repository.
@@ -58,7 +70,9 @@ Every integration is self-contained and can be deployed independently. Its clien
 
 ### Stripe grids on a Salesforce record
 
-Set `parentMatchColumn` to the Stripe column and `parentMatchField` to a field on the Salesforce record containing the match value. When the grid is on a Contact, these configurations show that Contact's payments:
+Set the grid's Data Provider Configuration to one of `customers`, `invoices`, `subscriptions`, `charges`, `payment_intents`, `refunds`, `disputes`, `payouts`, `products`, `prices`, or `balance_transactions`. The six resources from `refunds` onward are read only.
+
+To show charges on a Salesforce record, store the Stripe customer ID (such as `cus_123`) on that record. Set `parentMatchColumn` to `customer` and `parentMatchField` to the Salesforce field holding that ID. For example, a Contact grid uses:
 
 ```json
 {"resource":"charges","parentMatchColumn":"customer","parentMatchField":"Stripe_Customer_Id__c"}
@@ -68,7 +82,7 @@ Set `parentMatchColumn` to the Stripe column and `parentMatchField` to a field o
 {"resource":"charges","parentMatchColumn":"customer_email","parentMatchField":"Email"}
 ```
 
-`charges.customer_email` uses the charge's billing email, falling back to its receipt email. For `payment_intents`, use `customer` for the Stripe customer ID or `receipt_email` for email matching. Invoices expose `customer` and `customer_email`. A record with an empty match field shows no rows. If `parentMatchField` is omitted, it defaults to the Salesforce record ID. Email matches ignore case; Stripe IDs match exactly. The Stripe record limit applies after matching. Customer ID matches use Stripe's customer filter; email matches scan Stripe pages and can reach Salesforce's callout limit on large accounts.
+The second configuration matches charges by the Contact's email. `charges.customer_email` uses the charge's billing email, falling back to its receipt email. For `payment_intents`, use `customer` for the Stripe customer ID or `receipt_email` for email matching. Invoices expose `customer` and `customer_email`. Refunds and disputes can match `charge` or `payment_intent`; prices can match `product`. A record with an empty match field shows no rows. If `parentMatchField` is omitted, it defaults to the Salesforce record ID. Email matches ignore case; Stripe IDs match exactly. The Stripe record limit applies after matching. Customer ID matches use Stripe's customer filter; email matches scan Stripe pages and can reach Salesforce's callout limit on large accounts.
 
 Deploy one integration by passing its source folder:
 

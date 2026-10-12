@@ -4,9 +4,6 @@ global with sharing class StripeGridDataProvider
     public class ProviderException extends Exception {}
 
 
-    // ─── Instance Cache ───────────────────────────────────────────────
-    private List<Map<String, Object>> cachedRecords;
-
     // ─── Config ───────────────────────────────────────────────────────
 
     @TestVisible
@@ -64,6 +61,12 @@ global with sharing class StripeGridDataProvider
         if (String.isNotBlank(cfg.parentMatchColumn) && String.isBlank(cfg.parentMatchField)) {
             cfg.parentMatchField = 'Id';
         }
+        if (!new Set<String>{
+            'customers', 'invoices', 'subscriptions', 'charges', 'payment_intents',
+            'refunds', 'disputes', 'payouts', 'products', 'prices', 'balance_transactions'
+        }.contains(cfg.resource)) {
+            throw new ProviderException('Unsupported Stripe resource: ' + cfg.resource);
+        }
         return cfg;
     }
 
@@ -73,17 +76,11 @@ global with sharing class StripeGridDataProvider
         appcg.GridDataProviderTypesV1.ProviderContext context
     ) {
         StripeConfig cfg = parseConfig(context);
-        try {
-            cachedRecords = null;
-            if (String.isBlank(cfg.parentMatchColumn) || context == null || String.isBlank(context.parentId)) {
-                StripeClient client = new StripeClient();
-                Map<String, Object> response = client.listResources(cfg.resource, 100, null);
-                cachedRecords = parseStripeRecords(cfg.resource, (List<Object>) response.get('data'));
-            } else {
-                validateParentMatchColumn(cfg);
-            }
+        if (String.isNotBlank(cfg.parentMatchColumn) && context != null && String.isNotBlank(context.parentId)) {
+            validateParentMatchColumn(cfg);
+        }
 
-            appcg.GridDataProviderTypesV1.Capabilities capabilities = new appcg.GridDataProviderTypesV1.Capabilities();
+        appcg.GridDataProviderTypesV1.Capabilities capabilities = new appcg.GridDataProviderTypesV1.Capabilities();
             if ('customers'.equals(cfg.resource)) {
                 capabilities.supportedFeatures = new Set<String>{
                     'SEARCH', 'REFRESH', 'ADD', 'EDIT', 'DELETE', 'DOWNLOAD_CSV'
@@ -104,94 +101,18 @@ global with sharing class StripeGridDataProvider
             capabilities.supportsServerPagination = true;
             capabilities.maxPageSize = 100;
             capabilities.columns = buildColumnDefinitions(cfg.resource);
-            return capabilities;
-        } finally {
-        }
+        return capabilities;
     }
 
     global appcg.GridDataProviderTypesV1.PageResult getData(
         appcg.GridDataProviderTypesV1.QueryRequest request
     ) {
-        try {
-            StripeConfig cfg = parseConfig(request?.context);
-            if (String.isNotBlank(cfg.parentMatchColumn) && request?.context != null &&
-                String.isNotBlank(request.context.parentId)) {
-                cachedRecords = null;
-                return getParentFilteredData(request, cfg);
-            }
-            List<Map<String, Object>> records;
-            Integer totalCount;
-
-            appcg__Grid_Definition__c gridDef = getGridDefinition(request?.context);
-            String paginationType = gridDef?.appcg__Pagination_Type__c;
-            Integer recordLimit = (gridDef?.appcg__Record_Limit__c != null && gridDef.appcg__Record_Limit__c > 0)
-                ? (Integer) gridDef.appcg__Record_Limit__c
-                : 100;
-
-            Integer startIndex = request.startIndex != null ? Math.max(0, request.startIndex) : 0;
-            Integer pageSize;
-            Integer requestedPageSize = (request.pageSize != null && request.pageSize > 0)
-                ? request.pageSize
-                : (gridDef?.appcg__Page_Size__c != null ? Integer.valueOf(gridDef.appcg__Page_Size__c) : 20);
-            if (paginationType == 'Client-Side') {
-                pageSize = Math.min(recordLimit, 100);
-            } else {
-                pageSize = (gridDef?.appcg__Record_Limit__c != null && gridDef.appcg__Record_Limit__c > 0)
-                    ? Math.min(requestedPageSize, (Integer) gridDef.appcg__Record_Limit__c)
-                    : Math.min(requestedPageSize, 100);
-            }
-
-            if (cachedRecords != null && startIndex == 0) {
-                records = cachedRecords;
-                cachedRecords = null;
-                totalCount = records.size();
-            } else {
-                StripeClient client = new StripeClient();
-
-                // Fetch requested page chunk
-                Integer fetchLimit = Math.min(startIndex + pageSize, 100);
-                Map<String, Object> response = client.listResources(cfg.resource, fetchLimit, null);
-                List<Object> rawList = (List<Object>) response.get('data');
-                Boolean hasMore = Boolean.valueOf(response.get('has_more'));
-                List<Map<String, Object>> allParsed = parseStripeRecords(cfg.resource, rawList);
-
-                if (startIndex < allParsed.size()) {
-                    records = new List<Map<String, Object>>();
-                    Integer endIndex = Math.min(allParsed.size(), startIndex + pageSize);
-                    for (Integer i = startIndex; i < endIndex; i++) {
-                        records.add(allParsed[i]);
-                    }
-                } else {
-                    records = new List<Map<String, Object>>();
-                }
-
-                if (hasMore == true) {
-                    totalCount = startIndex + records.size() + 1;
-                } else {
-                    totalCount = allParsed.size();
-                }
-            }
-
-            while (records != null && records.size() > pageSize) {
-                records.remove(records.size() - 1);
-            }
-
-            if (gridDef?.appcg__Record_Limit__c != null && gridDef.appcg__Record_Limit__c > 0 && totalCount != null) {
-                totalCount = Math.min(totalCount, (Integer) gridDef.appcg__Record_Limit__c);
-            }
-
-            // Apply search filter
-            if (String.isNotBlank(request.searchTerm)) {
-                records = filterBySearch(records, request.searchTerm);
-                totalCount = records.size();
-            }
-
-            appcg.GridDataProviderTypesV1.PageResult result = new appcg.GridDataProviderTypesV1.PageResult();
-            result.records = records;
-            result.totalCount = (paginationType == 'Client-Side') ? records.size() : totalCount;
-            return result;
-        } finally {
+        StripeConfig cfg = parseConfig(request?.context);
+        if (String.isNotBlank(cfg.parentMatchColumn) && request?.context != null &&
+            String.isNotBlank(request.context.parentId)) {
+            return getParentFilteredData(request, cfg);
         }
+        return getUnfilteredData(request, cfg);
     }
 
     // ─── GridDataMutationProviderV1 ───────────────────────────────────
@@ -238,6 +159,9 @@ global with sharing class StripeGridDataProvider
             return;
         }
         StripeConfig cfg = parseConfig(request.context);
+        if (cfg.resource != 'customers' && cfg.resource != 'subscriptions') {
+            throw new ProviderException('Delete is only supported for customers and subscriptions.');
+        }
         try {
             StripeClient client = new StripeClient();
             for (String recId : request.recordIds) {
@@ -248,6 +172,59 @@ global with sharing class StripeGridDataProvider
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────
+
+    private static appcg.GridDataProviderTypesV1.PageResult getUnfilteredData(
+        appcg.GridDataProviderTypesV1.QueryRequest request,
+        StripeConfig cfg
+    ) {
+        appcg__Grid_Definition__c gridDef = getGridDefinition(request?.context);
+        Integer recordLimit = (gridDef?.appcg__Record_Limit__c != null && gridDef.appcg__Record_Limit__c > 0)
+            ? (Integer) gridDef.appcg__Record_Limit__c : 100;
+        Boolean clientSide = gridDef?.appcg__Pagination_Type__c == 'Client-Side';
+        Integer requestedPageSize = request?.pageSize != null && request.pageSize > 0
+            ? request.pageSize
+            : (gridDef?.appcg__Page_Size__c != null ? Integer.valueOf(gridDef.appcg__Page_Size__c) : 20);
+        Integer pageSize = clientSide ? recordLimit : Math.min(requestedPageSize, 100);
+        Integer startIndex = clientSide ? 0 : Math.max(0, request?.startIndex ?? 0);
+        String searchTerm = String.isBlank(request?.searchTerm) ? null : request.searchTerm.toLowerCase();
+        appcg.GridDataProviderTypesV1.PageResult result = new appcg.GridDataProviderTypesV1.PageResult();
+        result.records = new List<Map<String, Object>>();
+
+        StripeClient client = new StripeClient();
+        String startingAfter;
+        Boolean hasMore = true;
+        Integer examined = 0;
+        Integer matched = 0;
+        while (hasMore && examined < recordLimit) {
+            if (Limits.getCallouts() >= Limits.getLimitCallouts()) {
+                throw new ProviderException('Stripe list exceeded the available callouts. Lower the grid record limit.');
+            }
+            Map<String, Object> response = client.listResources(
+                cfg.resource, Math.min(100, recordLimit - examined), startingAfter
+            );
+            List<Object> rawList = (List<Object>) response.get('data');
+            if (rawList == null || rawList.isEmpty()) break;
+            for (Map<String, Object> record : parseStripeRecords(cfg.resource, rawList)) {
+                if (examined >= recordLimit) break;
+                examined++;
+                if (searchTerm != null && filterBySearch(
+                    new List<Map<String, Object>>{ record }, searchTerm
+                ).isEmpty()) continue;
+                if (clientSide || (matched >= startIndex && matched < startIndex + pageSize)) {
+                    result.records.add(record);
+                }
+                matched++;
+            }
+            hasMore = response.get('has_more') == true;
+            Map<String, Object> lastRawRecord = (Map<String, Object>) rawList[rawList.size() - 1];
+            startingAfter = lastRawRecord.get('id') == null ? null : String.valueOf(lastRawRecord.get('id'));
+            if (hasMore && String.isBlank(startingAfter)) {
+                throw new ProviderException('Stripe returned a page without a cursor.');
+            }
+        }
+        result.totalCount = matched;
+        return result;
+    }
 
     private static appcg.GridDataProviderTypesV1.PageResult getParentFilteredData(
         appcg.GridDataProviderTypesV1.QueryRequest request,
@@ -269,12 +246,10 @@ global with sharing class StripeGridDataProvider
         Integer requestedPageSize = (request.pageSize != null && request.pageSize > 0)
             ? request.pageSize
             : (gridDef?.appcg__Page_Size__c != null ? Integer.valueOf(gridDef.appcg__Page_Size__c) : 20);
-        Integer pageSize = clientSide ? Math.min(recordLimit, 100) : Math.min(requestedPageSize, 100);
+        Integer pageSize = clientSide ? recordLimit : Math.min(requestedPageSize, 100);
         Integer startIndex = clientSide ? 0 : (request.startIndex == null ? 0 : Math.max(0, request.startIndex));
         String searchTerm = String.isBlank(request.searchTerm) ? null : request.searchTerm.toLowerCase();
-        String customerId = matchColumn == 'customer' &&
-            new Set<String>{ 'charges', 'invoices', 'subscriptions', 'payment_intents' }.contains(cfg.resource)
-            ? parentValue.trim() : null;
+        String filterName = listFilterName(cfg.resource, matchColumn);
 
         StripeClient client = new StripeClient();
         String startingAfter;
@@ -284,7 +259,9 @@ global with sharing class StripeGridDataProvider
             if (Limits.getCallouts() >= Limits.getLimitCallouts()) {
                 throw new ProviderException('Stripe parent filter exceeded the available callouts. Narrow the Stripe data or use a customer ID match.');
             }
-            Map<String, Object> response = client.listResources(cfg.resource, 100, startingAfter, customerId);
+            Map<String, Object> response = client.listResources(
+                cfg.resource, 100, startingAfter, filterName, filterName == null ? null : parentValue.trim()
+            );
             List<Object> rawList = (List<Object>) response.get('data');
             if (rawList == null || rawList.isEmpty()) {
                 break;
@@ -325,6 +302,16 @@ global with sharing class StripeGridDataProvider
         throw new ProviderException(
             'Parent match column "' + cfg.parentMatchColumn + '" is not available for Stripe ' + cfg.resource + '.'
         );
+    }
+
+    private static String listFilterName(String resource, String column) {
+        if (column == 'customer' && new Set<String>{
+            'charges', 'invoices', 'subscriptions', 'payment_intents'
+        }.contains(resource)) return 'customer';
+        if ((resource == 'refunds' || resource == 'disputes') &&
+            (column == 'charge' || column == 'payment_intent')) return column;
+        if (resource == 'prices' && column == 'product') return 'product';
+        return null;
     }
 
     private static Boolean parentValuesMatch(String stripeValue, String parentValue, String column) {
@@ -445,14 +432,21 @@ global with sharing class StripeGridDataProvider
                 row.put('description', item.get('description') == null ? '' : String.valueOf(item.get('description')));
                 row.put('created', formatTimestamp(item.get('created')));
             } else {
-                // Generic fallback
-                for (String key : item.keySet()) {
-                    Object v = item.get(key);
-                    if (v instanceof Map<String, Object> || v instanceof List<Object>) {
-                        row.put(key, JSON.serialize(v));
+                for (String spec : extraFieldSpecs(resource)) {
+                    List<String> parts = spec.split('\\|');
+                    Object value = fieldValue(item, parts[3]);
+                    if (parts[4] == 'AMOUNT') {
+                        value = formatAmount(value);
+                    } else if (parts[4] == 'TIME') {
+                        value = formatTimestamp(value);
+                    } else if (parts[4] == 'BOOLEAN') {
+                        value = value == true ? 'true' : 'false';
+                    } else if (parts[4] == 'UPPER') {
+                        value = value == null ? '' : String.valueOf(value).toUpperCase();
                     } else {
-                        row.put(key, v == null ? '' : String.valueOf(v));
+                        value = value == null ? '' : String.valueOf(value);
                     }
+                    row.put(parts[0], value);
                 }
             }
             parsed.add(row);
@@ -548,8 +542,66 @@ global with sharing class StripeGridDataProvider
             columns.add(column('receipt_email', 'Receipt Email', 'TEXT', true, true, null));
             columns.add(column('description', 'Description', 'TEXT', true, true, null));
             columns.add(column('created', 'Created Date', 'DATETIME', true, true, '160px'));
+        } else {
+            for (String spec : extraFieldSpecs(resource)) {
+                List<String> parts = spec.split('\\|');
+                columns.add(column(parts[0], parts[1], parts[2], true, true, parts[5]));
+            }
         }
         return columns;
+    }
+
+    // id | label | grid type | Stripe field path | format | width
+    private static List<String> extraFieldSpecs(String resource) {
+        if (resource == 'refunds') return new List<String>{
+            'amount|Amount|NUMBER|amount|AMOUNT|100px', 'currency|Currency|TEXT|currency|UPPER|80px',
+            'status|Status|TEXT|status|TEXT|110px', 'charge|Charge|TEXT|charge|TEXT|160px',
+            'payment_intent|Payment Intent|TEXT|payment_intent|TEXT|170px',
+            'reason|Reason|TEXT|reason|TEXT|160px', 'created|Created Date|DATETIME|created|TIME|160px'
+        };
+        if (resource == 'disputes') return new List<String>{
+            'amount|Amount|NUMBER|amount|AMOUNT|100px', 'currency|Currency|TEXT|currency|UPPER|80px',
+            'status|Status|TEXT|status|TEXT|140px', 'charge|Charge|TEXT|charge|TEXT|160px',
+            'payment_intent|Payment Intent|TEXT|payment_intent|TEXT|170px',
+            'reason|Reason|TEXT|reason|TEXT|160px', 'created|Created Date|DATETIME|created|TIME|160px'
+        };
+        if (resource == 'payouts') return new List<String>{
+            'amount|Amount|NUMBER|amount|AMOUNT|100px', 'currency|Currency|TEXT|currency|UPPER|80px',
+            'status|Status|TEXT|status|TEXT|110px', 'destination|Destination|TEXT|destination|TEXT|170px',
+            'arrival_date|Arrival Date|DATETIME|arrival_date|TIME|160px',
+            'description|Description|TEXT|description|TEXT|200px',
+            'created|Created Date|DATETIME|created|TIME|160px'
+        };
+        if (resource == 'products') return new List<String>{
+            'name|Name|TEXT|name|TEXT|200px', 'description|Description|TEXT|description|TEXT|240px',
+            'active|Active|BOOLEAN|active|BOOLEAN|90px',
+            'default_price|Default Price|TEXT|default_price|TEXT|170px',
+            'created|Created Date|DATETIME|created|TIME|160px'
+        };
+        if (resource == 'prices') return new List<String>{
+            'product|Product|TEXT|product|TEXT|170px', 'nickname|Nickname|TEXT|nickname|TEXT|160px',
+            'unit_amount|Unit Amount|NUMBER|unit_amount|AMOUNT|110px',
+            'currency|Currency|TEXT|currency|UPPER|80px', 'type|Type|TEXT|type|TEXT|110px',
+            'interval|Interval|TEXT|recurring.interval|TEXT|100px',
+            'active|Active|BOOLEAN|active|BOOLEAN|90px',
+            'created|Created Date|DATETIME|created|TIME|160px'
+        };
+        if (resource == 'balance_transactions') return new List<String>{
+            'amount|Amount|NUMBER|amount|AMOUNT|100px', 'fee|Fee|NUMBER|fee|AMOUNT|100px',
+            'net|Net|NUMBER|net|AMOUNT|100px', 'currency|Currency|TEXT|currency|UPPER|80px',
+            'type|Type|TEXT|type|TEXT|150px', 'source|Source|TEXT|source|TEXT|170px',
+            'created|Created Date|DATETIME|created|TIME|160px'
+        };
+        return new List<String>();
+    }
+
+    private static Object fieldValue(Map<String, Object> record, String path) {
+        Object value = record;
+        for (String part : path.split('\\.')) {
+            if (!(value instanceof Map<String, Object>)) return null;
+            value = ((Map<String, Object>) value).get(part);
+        }
+        return value;
     }
 
     private static appcg.GridDataProviderTypesV1.ColumnDefinition column(

@@ -1,5 +1,24 @@
 @IsTest
 private class StripeGridDataProviderTest {
+    private class TwoPageMock implements HttpCalloutMock {
+        public List<String> endpoints = new List<String>();
+        public HttpResponse respond(HttpRequest request) {
+            endpoints.add(request.getEndpoint());
+            if (request.getEndpoint().contains('starting_after=ch_100')) {
+                return StripeTestSupport.makeResponse(200,
+                    '{"data":[{"id":"ch_101","description":"TARGET","amount":100}],' +
+                    '"has_more":false}'
+                );
+            }
+            List<String> rows = new List<String>();
+            for (Integer i = 1; i <= 100; i++) {
+                rows.add('{"id":"ch_' + i + '","description":"ordinary","amount":100}');
+            }
+            return StripeTestSupport.makeResponse(200,
+                '{"data":[' + String.join(rows, ',') + '],"has_more":true}'
+            );
+        }
+    }
     private static void setupConfig() {
     }
 
@@ -341,5 +360,138 @@ private class StripeGridDataProviderTest {
         } catch (StripeGridDataProvider.ProviderException e) {
             System.assert(e.getMessage().contains('not available for Stripe charges'));
         }
+    }
+
+    @IsTest
+    static void additionalResourcesMapFieldsToColumns() {
+        StripeTestSupport.RoutingMock mock = new StripeTestSupport.RoutingMock();
+        for (String resource : new List<String>{
+            'refunds', 'disputes', 'payouts', 'products', 'prices', 'balance_transactions'
+        }) {
+            mock.byEndpointContains.put('/v1/' + resource, StripeTestSupport.makeResponse(200,
+                '{"data":[{"id":"test_1","amount":2500,"unit_amount":2500,"currency":"usd",' +
+                '"name":"Test product","recurring":{"interval":"month"},"active":true}],' +
+                '"has_more":false}'
+            ));
+        }
+        Test.setMock(HttpCalloutMock.class, mock);
+        for (String resource : new List<String>{
+            'refunds', 'disputes', 'payouts', 'products', 'prices', 'balance_transactions'
+        }) {
+            StripeGridDataProvider.testGridDef = new appcg__Grid_Definition__c(
+                appcg__Data_Provider_Config__c = '{"resource":"' + resource + '"}'
+            );
+            StripeGridDataProvider provider = new StripeGridDataProvider();
+            appcg.GridDataProviderTypesV1.Capabilities caps = provider.getCapabilities(null);
+            appcg.GridDataProviderTypesV1.QueryRequest request = new appcg.GridDataProviderTypesV1.QueryRequest();
+            request.context = new appcg.GridDataProviderTypesV1.ProviderContext();
+            appcg.GridDataProviderTypesV1.PageResult page = provider.getData(request);
+            System.assert(caps.columns.size() > 1, resource);
+            System.assertEquals(1, page.records.size(), resource);
+            for (appcg.GridDataProviderTypesV1.ColumnDefinition column : caps.columns) {
+                System.assert(page.records[0].containsKey(column.id), resource + ': missing ' + column.id);
+            }
+            System.assert(!caps.supportedFeatures.contains('DELETE'), resource);
+        }
+    }
+
+    @IsTest
+    static void pricesMapNestedIntervalAndAmount() {
+        StripeGridDataProvider.testGridDef = new appcg__Grid_Definition__c(
+            appcg__Data_Provider_Config__c = '{"resource":"prices"}'
+        );
+        List<Object> raw = (List<Object>) JSON.deserializeUntyped(
+            '[{"id":"price_1","product":"prod_1","unit_amount":2500,"currency":"usd",' +
+            '"recurring":{"interval":"month"},"active":true}]'
+        );
+        Map<String, Object> row = StripeGridDataProvider.parseStripeRecords('prices', raw)[0];
+        System.assertEquals('25.00', row.get('unit_amount'));
+        System.assertEquals('month', row.get('interval'));
+        System.assertEquals('USD', row.get('currency'));
+        System.assertEquals('true', row.get('active'));
+    }
+
+    @IsTest
+    static void refundsFilterByChargeInParentContext() {
+        String chargeId = UserInfo.getUserId();
+        StripeGridDataProvider.testGridDef = new appcg__Grid_Definition__c(
+            appcg__Data_Provider_Config__c = '{"resource":"refunds","parentMatchColumn":"charge"}'
+        );
+        StripeTestSupport.RoutingMock mock = new StripeTestSupport.RoutingMock();
+        mock.byEndpointContains.put('/v1/refunds?limit=100&charge=' + chargeId,
+            StripeTestSupport.makeResponse(200,
+                '{"data":[{"id":"re_1","charge":"' + chargeId + '","amount":2500},' +
+                '{"id":"re_2","charge":"other","amount":1000}],"has_more":false}'
+            ));
+        Test.setMock(HttpCalloutMock.class, mock);
+        appcg.GridDataProviderTypesV1.ProviderContext context = new appcg.GridDataProviderTypesV1.ProviderContext();
+        context.parentId = chargeId;
+        appcg.GridDataProviderTypesV1.QueryRequest request = new appcg.GridDataProviderTypesV1.QueryRequest();
+        request.context = context;
+
+        appcg.GridDataProviderTypesV1.PageResult page = new StripeGridDataProvider().getData(request);
+
+        System.assertEquals(1, page.totalCount);
+        System.assertEquals('re_1', page.records[0].get('Id'));
+        System.assert(mock.endpointLog[0].contains('charge=' + chargeId));
+    }
+
+    @IsTest
+    static void unknownResourceFailsBeforeCallout() {
+        StripeGridDataProvider.testGridDef = new appcg__Grid_Definition__c(
+            appcg__Data_Provider_Config__c = '{"resource":"unknown"}'
+        );
+        try {
+            new StripeGridDataProvider().getCapabilities(null);
+            System.assert(false, 'Expected unsupported resource error');
+        } catch (StripeGridDataProvider.ProviderException e) {
+            System.assert(e.getMessage().contains('Unsupported Stripe resource'));
+        }
+    }
+
+    @IsTest
+    static void readOnlyResourceRejectsDelete() {
+        StripeGridDataProvider.testGridDef = new appcg__Grid_Definition__c(
+            appcg__Data_Provider_Config__c = '{"resource":"refunds"}'
+        );
+        appcg.GridDataProviderTypesV1.DeleteRequest request = new appcg.GridDataProviderTypesV1.DeleteRequest();
+        request.context = new appcg.GridDataProviderTypesV1.ProviderContext();
+        request.recordIds = new List<String>{ 're_1' };
+        try {
+            new StripeGridDataProvider().deleteRecords(request);
+            System.assert(false, 'Expected read-only resource to reject deletion');
+        } catch (StripeGridDataProvider.ProviderException e) {
+            System.assert(e.getMessage().contains('only supported for customers and subscriptions'));
+        }
+    }
+
+    @IsTest
+    static void unfilteredDataPaginatesAndSearchesAcrossCursorPages() {
+        StripeGridDataProvider.testGridDef = new appcg__Grid_Definition__c(
+            appcg__Data_Provider_Config__c = '{"resource":"charges"}',
+            appcg__Record_Limit__c = 101
+        );
+        TwoPageMock mock = new TwoPageMock();
+        Test.setMock(HttpCalloutMock.class, mock);
+        StripeGridDataProvider provider = new StripeGridDataProvider();
+        appcg.GridDataProviderTypesV1.ProviderContext context = new appcg.GridDataProviderTypesV1.ProviderContext();
+        provider.getCapabilities(context);
+        System.assertEquals(0, mock.endpoints.size(), 'Capabilities should not consume a Stripe page');
+
+        appcg.GridDataProviderTypesV1.QueryRequest request = new appcg.GridDataProviderTypesV1.QueryRequest();
+        request.context = context;
+        request.startIndex = 100;
+        request.pageSize = 1;
+        appcg.GridDataProviderTypesV1.PageResult page = provider.getData(request);
+        System.assertEquals(101, page.totalCount);
+        System.assertEquals(1, page.records.size());
+        System.assertEquals('ch_101', page.records[0].get('Id'));
+
+        request.startIndex = 0;
+        request.searchTerm = 'TARGET';
+        page = provider.getData(request);
+        System.assertEquals(1, page.totalCount);
+        System.assertEquals('ch_101', page.records[0].get('Id'));
+        System.assert(mock.endpoints[1].contains('starting_after=ch_100'));
     }
 }

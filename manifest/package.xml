@@ -11,6 +11,11 @@
         <members>AsanaGridDataProvider</members>
         <members>AsanaGridDataProviderTest</members>
         <members>AsanaTestSupport</members>
+        <members>ExcelClient</members>
+        <members>ExcelClientTest</members>
+        <members>ExcelGridDataProvider</members>
+        <members>ExcelGridDataProviderTest</members>
+        <members>ExcelTestSupport</members>
         <members>GmailClient</members>
         <members>GmailClientTest</members>
         <members>GmailGridDataProvider</members>
@@ -31,6 +36,11 @@
         <members>HubSpotGridDataProvider</members>
         <members>HubSpotGridDataProviderTest</members>
         <members>HubSpotTestSupport</members>
+        <members>OutlookClient</members>
+        <members>OutlookClientTest</members>
+        <members>OutlookGridDataProvider</members>
+        <members>OutlookGridDataProviderTest</members>
+        <members>OutlookTestSupport</members>
         <members>QuickBooksClient</members>
         <members>QuickBooksClientTest</members>
         <members>QuickBooksGridDataProvider</members>
@@ -72,16 +82,19 @@
         <members>Gmail_Google_OAuth</members>
         <members>Google_Analytics_OAuth</members>
         <members>Google_OAuth</members>
+        <members>Microsoft_OAuth</members>
         <members>Xero_OAuth</members>
         <name>AuthProvider</name>
     </types>
     <types>
         <members>Airtable</members>
         <members>Asana</members>
+        <members>Excel</members>
         <members>Gmail_Google_APIs</members>
         <members>Google_APIs</members>
         <members>Google_Analytics_APIs</members>
         <members>HubSpot</members>
+        <members>Outlook</members>
         <members>QuickBooks</members>
         <members>Salesforce_Org</members>
         <members>Shopify</members>
@@ -94,10 +107,12 @@
     <types>
         <members>Airtable</members>
         <members>Asana</members>
+        <members>Excel</members>
         <members>Gmail</members>
         <members>Google_Analytics</members>
         <members>Google_Sheets</members>
         <members>HubSpot</members>
+        <members>Outlook</members>
         <members>QuickBooks</members>
         <members>Salesforce_Org</members>
         <members>Shopify</members>
@@ -110,10 +125,12 @@
     <types>
         <members>Airtable_Integration</members>
         <members>Asana_Integration</members>
+        <members>Excel_Integration</members>
         <members>Gmail_Integration</members>
         <members>GoogleAnalytics_Integration</members>
         <members>Google_Sheets_Integration</members>
         <members>HubSpot_Integration</members>
+        <members>Outlook_Integration</members>
         <members>QuickBooks_Integration</members>
         <members>Salesforce_Integration</members>
         <members>Shopify_Integration</members>

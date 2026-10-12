@@ -12,7 +12,7 @@ public with sharing class StripeClient {
     }
 
     /**
-     * List records of a given Stripe resource (customers, invoices, subscriptions, charges, payment_intents).
+     * List records of a supported Stripe resource.
      * GET /v1/{resource}
      */
     public Map<String, Object> listResources(
@@ -29,6 +29,17 @@ public with sharing class StripeClient {
         String startingAfter,
         String customerId
     ) {
+        return listResources(resource, limitCount, startingAfter,
+            String.isBlank(customerId) ? null : 'customer', customerId);
+    }
+
+    public Map<String, Object> listResources(
+        String resource,
+        Integer limitCount,
+        String startingAfter,
+        String filterName,
+        String filterValue
+    ) {
         String path = '/v1/' + enc(resource);
         List<String> queryParams = new List<String>();
         if (limitCount != null && limitCount > 0) {
@@ -37,8 +48,11 @@ public with sharing class StripeClient {
         if (String.isNotBlank(startingAfter)) {
             queryParams.add('starting_after=' + enc(startingAfter));
         }
-        if (String.isNotBlank(customerId)) {
-            queryParams.add('customer=' + enc(customerId));
+        if (String.isNotBlank(filterName) && String.isNotBlank(filterValue)) {
+            if (!new Set<String>{ 'customer', 'charge', 'payment_intent', 'product' }.contains(filterName)) {
+                throw new ClientException('Unsupported Stripe list filter: ' + filterName);
+            }
+            queryParams.add(filterName + '=' + enc(filterValue));
         }
         if (!queryParams.isEmpty()) {
             path += '?' + String.join(queryParams, '&');
