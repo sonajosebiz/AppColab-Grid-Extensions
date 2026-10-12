@@ -8,9 +8,9 @@ Install [AppColab Grid](https://appexchange.salesforce.com/appxListingDetail?lis
 
 ## Google Sheets
 
-Source: `force-app/main/google-sheets`
+Source: `force-app/main/google-sheets` · [Extension README](force-app/main/google-sheets/README.md)
 
-The extension allows you to integract with data in Google Sheet from your grids in Salesforce. 
+The extension allows you to interact with data in Google Sheets from your grids in Salesforce.
 
 It supports discovery of google sheet columns, search, add, edit, delete, CSV download, and optional filtering/auto-population by a Salesforce parent record. It expects `Google_Sheets` Named Credential.
 
@@ -49,24 +49,29 @@ Set the grid's Data Provider Configuration to the QuickBooks company ID and enti
 
 Server pagination queries only the requested page, with a maximum page size of 1,000. Search scans QuickBooks pages up to the configured record limit so its total count and page offsets reflect all matches. The default record limit is 1,000 and the maximum is 10,000. The integration is read only.
 
-## Other integrations
+## Integrations
 
 Every integration is self-contained and can be deployed independently. Its client owns Named Credential callouts, JSON or form headers, a 60-second timeout, transient-error retry, and HTTP error handling. No integration depends on the unpackaged `APIClient`, integration custom metadata, logging classes, or test utilities from another repository.
 
-| Integration | Source folder | Data provider | Named Credential |
-| --- | --- | --- | --- |
-| Airtable | `force-app/main/airtable` | `AirtableGridDataProvider` | `Airtable` |
-| Asana | `force-app/main/asana` | `AsanaGridDataProvider` | `Asana` |
-| Gmail | `force-app/main/gmail` | `GmailGridDataProvider` | `Gmail` |
-| Google Analytics | `force-app/main/google-analytics` | `GoogleAnalyticsGridDataProvider` | `Google_Analytics` |
-| HubSpot | `force-app/main/hubspot` | `HubSpotGridDataProvider` | `HubSpot` |
-| QuickBooks | `force-app/main/quickbooks` | `QuickBooksGridDataProvider` | `QuickBooks` |
-| Salesforce cross-org | `force-app/main/salesforce` | `SalesforceGridDataProvider` | `Salesforce_Org` |
-| Shopify | `force-app/main/shopify` | `ShopifyGridDataProvider` | `Shopify` |
-| Stripe | `force-app/main/stripe` | `StripeGridDataProvider` | `Stripe` |
-| Supabase | `force-app/main/supabase` | `SupabaseGridDataProvider` | `Supabase` |
-| Trello | `force-app/main/trello` | `TrelloGridDataProvider` | `Trello` |
-| Xero | `force-app/main/xero` | `XeroGridDataProvider` | `Xero` |
+| Integration | Extension README | Source folder | Data provider | Named Credential | Website setup guide |
+| --- | --- | --- | --- | --- | --- |
+| Airtable | [README](force-app/main/airtable/README.md) | `force-app/main/airtable` | `AirtableGridDataProvider` | `Airtable` | [Setup guide](https://appcolab.com/guide/appcolab-grid/external-connections/airtable-grid-integration) |
+| Asana | [README](force-app/main/asana/README.md) | `force-app/main/asana` | `AsanaGridDataProvider` | `Asana` | [Setup guide](https://appcolab.com/guide/appcolab-grid/external-connections/asana-grid-integration) |
+| Microsoft Excel | [README](force-app/main/excel/README.md) | `force-app/main/excel` | `ExcelGridDataProvider` | `Excel` | [General setup guide](https://appcolab.com/guide/appcolab-grid/user-guide/displaying-data-from-external-systems) |
+| Gmail | [README](force-app/main/gmail/README.md) | `force-app/main/gmail` | `GmailGridDataProvider` | `Gmail` | [Setup guide](https://appcolab.com/guide/appcolab-grid/external-connections/gmail-grid-integration) |
+| Google Analytics | [README](force-app/main/google-analytics/README.md) | `force-app/main/google-analytics` | `GoogleAnalyticsGridDataProvider` | `Google_Analytics` | [Setup guide](https://appcolab.com/guide/appcolab-grid/external-connections/google-analytics-grid-integration) |
+| Google Sheets | [README](force-app/main/google-sheets/README.md) | `force-app/main/google-sheets` | `GoogleSheetsGridDataProvider` | `Google_Sheets` | [Setup guide](https://appcolab.com/guide/appcolab-grid/external-connections/google-sheets-grid-integration) |
+| HubSpot | [README](force-app/main/hubspot/README.md) | `force-app/main/hubspot` | `HubSpotGridDataProvider` | `HubSpot` | [Setup guide](https://appcolab.com/guide/appcolab-grid/external-connections/hubspot-grid-integration) |
+| Microsoft Outlook | [README](force-app/main/outlook/README.md) | `force-app/main/outlook` | `OutlookGridDataProvider` | `Outlook` | [General setup guide](https://appcolab.com/guide/appcolab-grid/user-guide/displaying-data-from-external-systems) |
+| QuickBooks | [README](force-app/main/quickbooks/README.md) | `force-app/main/quickbooks` | `QuickBooksGridDataProvider` | `QuickBooks` | [Setup guide](https://appcolab.com/guide/appcolab-grid/external-connections/quickbooks-grid-integration) |
+| Salesforce cross-org | [README](force-app/main/salesforce/README.md) | `force-app/main/salesforce` | `SalesforceGridDataProvider` | `Salesforce_Org` | [Setup guide](https://appcolab.com/guide/appcolab-grid/external-connections/salesforce-cross-org-grid-integration) |
+| Shopify | [README](force-app/main/shopify/README.md) | `force-app/main/shopify` | `ShopifyGridDataProvider` | `Shopify` | [Setup guide](https://appcolab.com/guide/appcolab-grid/external-connections/shopify-grid-integration) |
+| Stripe | [README](force-app/main/stripe/README.md) | `force-app/main/stripe` | `StripeGridDataProvider` | `Stripe` | [Setup guide](https://appcolab.com/guide/appcolab-grid/external-connections/stripe-grid-integration) |
+| Supabase | [README](force-app/main/supabase/README.md) | `force-app/main/supabase` | `SupabaseGridDataProvider` | `Supabase` | [Setup guide](https://appcolab.com/guide/appcolab-grid/external-connections/supabase-grid-integration) |
+| Trello | [README](force-app/main/trello/README.md) | `force-app/main/trello` | `TrelloGridDataProvider` | `Trello` | [Setup guide](https://appcolab.com/guide/appcolab-grid/external-connections/trello-grid-integration) |
+| Xero | [README](force-app/main/xero/README.md) | `force-app/main/xero` | `XeroGridDataProvider` | `Xero` | [Setup guide](https://appcolab.com/guide/appcolab-grid/external-connections/xero-grid-integration) |
+
+Excel and Outlook link to the general external-data setup guide because the website source has no dedicated guide for those extensions.
 
 ### Stripe grids on a Salesforce record
 
