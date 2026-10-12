@@ -2,7 +2,7 @@
 
 [Back to AppColab Grid Extensions](../../../README.md)
 
-View, search, add, edit, delete, and export Google Sheets rows in Salesforce, with column discovery and optional filtering and auto-population by a Salesforce parent record.
+View, search, add, edit, delete, and download Google Sheets rows as CSV in Salesforce, with column discovery and optional filtering and auto-population by a Salesforce parent record.
 
 ## Setup guide
 
