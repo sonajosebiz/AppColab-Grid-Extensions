@@ -103,7 +103,7 @@ global with sharing class OutlookGridDataProvider implements appcg.GridDataProvi
         Integer skip = (request.startIndex != null && request.startIndex >= 0) ? request.startIndex : 0;
         String filterExpression = buildFilterExpression(request, cfg);
 
-        IntegrationLogger.deferInserts = true;
+        // IntegrationLogger removed for standalone extension
         try {
             OutlookClient client = new OutlookClient();
             if ('events'.equals(cfg.resource)) {
@@ -126,8 +126,7 @@ global with sharing class OutlookGridDataProvider implements appcg.GridDataProvi
                 result.totalCount = computeTotalCount(response, result.records.size(), skip, paginationType, recordLimit);
             }
         } finally {
-            IntegrationLogger.deferInserts = false;
-            IntegrationLogger.commitLogs();
+            // logs committed
         }
 
         return result;

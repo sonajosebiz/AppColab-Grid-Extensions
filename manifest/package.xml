@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <Package xmlns="http://soap.sforce.com/2006/04/metadata">
     <types>
         <members>AirtableClient</members>
@@ -11,6 +11,11 @@
         <members>AsanaGridDataProvider</members>
         <members>AsanaGridDataProviderTest</members>
         <members>AsanaTestSupport</members>
+        <members>ClickUpClient</members>
+        <members>ClickUpClientTest</members>
+        <members>ClickUpGridDataProvider</members>
+        <members>ClickUpGridDataProviderTest</members>
+        <members>ClickUpTestSupport</members>
         <members>ExcelClient</members>
         <members>ExcelClientTest</members>
         <members>ExcelGridDataProvider</members>
@@ -41,6 +46,11 @@
         <members>OutlookGridDataProvider</members>
         <members>OutlookGridDataProviderTest</members>
         <members>OutlookTestSupport</members>
+        <members>NotionClient</members>
+        <members>NotionClientTest</members>
+        <members>NotionGridDataProvider</members>
+        <members>NotionGridDataProviderTest</members>
+        <members>NotionTestSupport</members>
         <members>QuickBooksClient</members>
         <members>QuickBooksClientTest</members>
         <members>QuickBooksGridDataProvider</members>
@@ -89,11 +99,13 @@
     <types>
         <members>Airtable</members>
         <members>Asana</members>
+        <members>ClickUp</members>
         <members>Excel</members>
         <members>Gmail_Google_APIs</members>
         <members>Google_APIs</members>
         <members>Google_Analytics_APIs</members>
         <members>HubSpot</members>
+        <members>Notion</members>
         <members>Outlook</members>
         <members>QuickBooks</members>
         <members>Salesforce_Org</members>
@@ -107,6 +119,7 @@
     <types>
         <members>Airtable</members>
         <members>Asana</members>
+        <members>ClickUp</members>
         <members>Excel</members>
         <members>Gmail</members>
         <members>Google_Analytics</members>
@@ -125,11 +138,13 @@
     <types>
         <members>Airtable_Integration</members>
         <members>Asana_Integration</members>
+        <members>ClickUp_Integration</members>
         <members>Excel_Integration</members>
         <members>Gmail_Integration</members>
         <members>GoogleAnalytics_Integration</members>
         <members>Google_Sheets_Integration</members>
         <members>HubSpot_Integration</members>
+        <members>Notion_Integration</members>
         <members>Outlook_Integration</members>
         <members>QuickBooks_Integration</members>
         <members>Salesforce_Integration</members>
