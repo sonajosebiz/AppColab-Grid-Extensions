@@ -1,4 +1,4 @@
-﻿# AppColab Grid Extensions
+# AppColab Grid Extensions
 
 Classes to extend your AppColab Grid to display data from external systems.
 
@@ -58,6 +58,7 @@ Every integration is self-contained and can be deployed independently. Its clien
 | Airtable | `force-app/main/airtable` | `AirtableGridDataProvider` | `Airtable` |
 | Asana | `force-app/main/asana` | `AsanaGridDataProvider` | `Asana` |
 | ClickUp | `force-app/main/clickup` | `ClickUpGridDataProvider` | `ClickUp` |
+| GitHub | `force-app/main/github` | `GitHubGridDataProvider` | `GitHub` |
 | Gmail | `force-app/main/gmail` | `GmailGridDataProvider` | `Gmail` |
 | Google Analytics | `force-app/main/google-analytics` | `GoogleAnalyticsGridDataProvider` | `Google_Analytics` |
 | HubSpot | `force-app/main/hubspot` | `HubSpotGridDataProvider` | `HubSpot` |

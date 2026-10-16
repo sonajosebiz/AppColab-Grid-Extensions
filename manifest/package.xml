@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <Package xmlns="http://soap.sforce.com/2006/04/metadata">
     <types>
         <members>AirtableClient</members>
@@ -21,6 +21,11 @@
         <members>ExcelGridDataProvider</members>
         <members>ExcelGridDataProviderTest</members>
         <members>ExcelTestSupport</members>
+        <members>GitHubClient</members>
+        <members>GitHubClientTest</members>
+        <members>GitHubGridDataProvider</members>
+        <members>GitHubGridDataProviderTest</members>
+        <members>GitHubTestSupport</members>
         <members>GmailClient</members>
         <members>GmailClientTest</members>
         <members>GmailGridDataProvider</members>
@@ -101,6 +106,7 @@
         <members>Asana</members>
         <members>ClickUp</members>
         <members>Excel</members>
+        <members>GitHub</members>
         <members>Gmail_Google_APIs</members>
         <members>Google_APIs</members>
         <members>Google_Analytics_APIs</members>
@@ -121,6 +127,7 @@
         <members>Asana</members>
         <members>ClickUp</members>
         <members>Excel</members>
+        <members>GitHub</members>
         <members>Gmail</members>
         <members>Google_Analytics</members>
         <members>Google_Sheets</members>
@@ -140,6 +147,7 @@
         <members>Asana_Integration</members>
         <members>ClickUp_Integration</members>
         <members>Excel_Integration</members>
+        <members>GitHub_Integration</members>
         <members>Gmail_Integration</members>
         <members>GoogleAnalytics_Integration</members>
         <members>Google_Sheets_Integration</members>

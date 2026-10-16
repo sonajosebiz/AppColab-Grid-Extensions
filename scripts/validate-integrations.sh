@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 target_org="${1:?Usage: ./scripts/validate-integrations.sh TARGET_ORG_ALIAS}"
@@ -9,6 +9,7 @@ validations=(
   "asana:AsanaClientTest:AsanaGridDataProviderTest"
   "clickup:ClickUpClientTest:ClickUpGridDataProviderTest"
   "excel:ExcelClientTest:ExcelGridDataProviderTest"
+  "github:GitHubClientTest:GitHubGridDataProviderTest"
   "gmail:GmailClientTest:GmailGridDataProviderTest"
   "google-analytics:GoogleAnalyticsClientTest:GoogleAnalyticsGridDataProviderTest"
   "hubspot:HubSpotClientTest:HubSpotGridDataProviderTest"
